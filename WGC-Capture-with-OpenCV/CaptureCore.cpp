@@ -172,7 +172,6 @@ void CaptureCore::Close() {
 		m_session = nullptr;
 		m_item = nullptr;
 	}
-	cv::destroyAllWindows();
 }
 
 void CaptureCore::OnFrameArrived(
