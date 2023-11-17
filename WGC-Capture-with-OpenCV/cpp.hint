@@ -1,0 +1,2 @@
+#define WGCCAPTUREWITHOPENCV_API __declspec(dllexport)
+#define WGCCAPTUREWITHOPENCV_API __declspec(dllimport)
