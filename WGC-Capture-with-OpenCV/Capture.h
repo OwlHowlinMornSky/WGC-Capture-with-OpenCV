@@ -27,7 +27,7 @@ public:
 	virtual void askForRefresh() override;
 	virtual bool isRefreshed() override;
 
-	virtual bool copyMat(cv::Mat& target, bool convertToBGR = false) override;
+	virtual bool copyMatTo(cv::Mat& target, bool convertToBGR = false) override;
 
 protected:
 	winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice m_device;

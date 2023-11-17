@@ -86,9 +86,14 @@ bool Capture::startCapture(HWND hwnd) {
 	}
 
 	m_capture = std::make_unique<CaptureCore>(m_device, item, hwnd);
+
 	if (m_clipClientArea)
 		m_capture->setClipToClientArea(m_clipClientArea);
+
 	m_capture->Open();
+
+	m_capture->askForRefresh();
+
 	return true;
 }
 
@@ -124,7 +129,7 @@ bool Capture::isRefreshed() {
 	return false;
 }
 
-bool Capture::copyMat(cv::Mat& target, bool convertToBGR) {
+bool Capture::copyMatTo(cv::Mat& target, bool convertToBGR) {
 	if (m_capture == nullptr)
 		return false;
 	m_capture->copyMat(target, convertToBGR);

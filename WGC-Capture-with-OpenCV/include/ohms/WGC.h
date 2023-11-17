@@ -1,11 +1,5 @@
 ﻿#pragma once
 
-// 下列 ifdef 块是创建使从 DLL 导出更简单的
-// 宏的标准方法。此 DLL 中的所有文件都是用命令行上定义的 WGCCAPTUREWITHOPENCV_EXPORTS
-// 符号编译的。在使用此 DLL 的
-// 任何项目上不应定义此符号。这样，源文件中包含此文件的任何其他项目都会将
-// WGCCAPTUREWITHOPENCV_API 函数视为是从 DLL 导入的，而此 DLL 则将用此宏定义的
-// 符号视为是被导出的。
 #ifdef WGCCAPTUREWITHOPENCV_EXPORTS
 #define WGCCAPTUREWITHOPENCV_API __declspec(dllexport)
 #else
@@ -18,7 +12,8 @@ namespace ohms {
 namespace wgc {
 
 /**
- * @brief 截图组件控制器 的 接口。
+ * @brief 截图组件控制器的接口。
+ * @brief Interface of Capture Manager.
 */
 class WGCCAPTUREWITHOPENCV_API ICapture {
 protected:
@@ -28,52 +23,64 @@ public:
 
 public:
 	/**
-	 * @brief 创建对指定窗口的截取。
-	 * @param hwnd: 指定窗口。
-	 * @return 是否成功。
+	 * @brief 开始捕获指定窗口
+	 * @brief Start capture the referred window.
+	 * @param hwnd: The referred window.
+	 * @return true if success.
 	*/
 	virtual bool startCapture(HWND hwnd) = 0;
 	/**
-	 * @brief 停止截取。
+	 * @brief 停止捕获。如果未在捕获则无事发生。
+	 * @brief Stop capture. Nothing will happend if it's not capturing.
 	*/
 	virtual void stopCapture() = 0;
 
 	/**
 	 * @brief 设置截取客户区。
-	 * @param enabled: 是否截取客户区。
+	 * @brief Capture the client area of the target or not.
+	 * @param enabled: true if only the client area is wanted.
 	*/
 	virtual void setClipToClientArea(bool enabled) = 0;
 	/**
 	 * @brief 是否已设为截取客户区。
-	 * @return true 则 已设为截取客户区。
+	 * @brief Ask if it has been set to capturing the client area or not.
+	 * @return true if only the client area now is captured.
 	*/
 	virtual bool isClipToClientArea() = 0;
 
 	/**
-	 * @brief 令截取器在下次捕获到帧时刷新 cv::Mat。
+	 * @brief 令截取器在下次捕获到帧时刷新 内部cv::Mat。
+	 * @brief 不调用此函数则捕获到的帧都会被丢弃。
+	 * @brief Require one new frame into the internal cv::Mat.
+	 * @brief Frames will be deserted if this function is not called.
 	*/
 	virtual void askForRefresh() = 0;
 	/**
-	 * @brief cv::Mat 是否已经刷新。
-	 * @return true 则从上次 askForRefresh 后已经刷新。
+	 * @brief 内部cv::Mat 是否已经刷新。
+	 * @brief Ask if the internal cv::Mat has been refreshed after the last call of askForRefresh().
+	 * @return true if the internal cv::Mat has been refershed。
 	*/
 	virtual bool isRefreshed() = 0;
 
 	/**
 	 * @brief 获取当前 cv::Mat。
-	 * @param target: 保存 cv::Mat 的地方。
-	 * @return 操作是否成功。
+	 * @brief Get the internal cv::Mat.
+	 * @param target: Which place the cv::Mat will copy to.
+	 * @param convertToBGR: Convert the mat to BGR or it will keep as BGRA.
+	 * @return true if success.
 	*/
-	virtual bool copyMat(cv::Mat& target, bool convertToBGR = false) = 0;
+	virtual bool copyMatTo(cv::Mat& target, bool convertToBGR = false) = 0;
 };
 
 /**
  * @brief 获取 截图控制器 实例。
- * @return 指向实例的指针。可能为 nullptr。
+ * @brief Get the instance of Capture Manager.
+ * @return a pointer to the instance. It may be nullptr.
 */
 WGCCAPTUREWITHOPENCV_API ICapture* getInstance();
 /**
  * @brief 销毁 截图控制器 实例，并清理现场。
+ * @brief Destroy the instance of Capture Manager and clear things about it.
 */
 WGCCAPTUREWITHOPENCV_API void drop();
 
