@@ -6,6 +6,8 @@
 #define WGCCAPTUREWITHOPENCV_API __declspec(dllimport)
 #endif
 
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
 #include <opencv2/core/mat.hpp>
 
 namespace ohms {
