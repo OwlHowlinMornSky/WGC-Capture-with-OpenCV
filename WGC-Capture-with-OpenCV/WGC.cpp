@@ -22,21 +22,18 @@ bool setupInstance() {
 namespace ohms {
 namespace wgc {
 
-WGCCAPTUREWITHOPENCV_API void drop() {
+ICapture* ICapture::getInstance() {
+	if (!g_instance && !::setupInstance())
+		return nullptr;
+	return g_instance;
+}
+
+void ICapture::drop() {
 	if (g_instance) {
 		delete ::g_instance;
 		winrt::uninit_apartment();
 	}
 	return;
-}
-
-WGCCAPTUREWITHOPENCV_API ICapture* getInstance() {
-	if (!g_instance) {
-		if (!::setupInstance()) {
-			return nullptr;
-		}
-	}
-	return g_instance;
 }
 
 } // namespace wgc

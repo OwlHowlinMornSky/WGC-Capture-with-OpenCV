@@ -30,10 +30,15 @@ bool get_client_box(HWND window, uint32_t width, uint32_t height, D3D11_BOX* cli
 
 	/* check iconic (minimized) twice, ABA is very unlikely */
 	bool client_box_available =
-		!IsIconic(window) && GetClientRect(window, &client_rect) &&
-		!IsIconic(window) && (client_rect.right > 0) && (client_rect.bottom > 0) &&
-		(DwmGetWindowAttribute(window, DWMWA_EXTENDED_FRAME_BOUNDS,
-							   &window_rect, sizeof(window_rect)) == S_OK) &&
+		!IsIconic(window) &&
+		GetClientRect(window, &client_rect) &&
+		!IsIconic(window) &&
+		(client_rect.right > 0) &&
+		(client_rect.bottom > 0) &&
+		(DwmGetWindowAttribute(
+			window, DWMWA_EXTENDED_FRAME_BOUNDS,
+			&window_rect, sizeof(window_rect)
+		) == S_OK) &&
 		ClientToScreen(window, &upper_left);
 
 	if (client_box_available) {
@@ -44,14 +49,12 @@ bool get_client_box(HWND window, uint32_t width, uint32_t height, D3D11_BOX* cli
 		client_box->top = top;
 
 		uint32_t texture_width = 1;
-		if (width > left) {
+		if (width > left)
 			texture_width = std::min(width - left, (uint32_t)client_rect.right);
-		}
 
 		uint32_t texture_height = 1;
-		if (height > top) {
+		if (height > top)
 			texture_height = std::min(height - top, (uint32_t)client_rect.bottom);
-		}
 
 		client_box->right = left + texture_width;
 		client_box->bottom = top + texture_height;
@@ -71,7 +74,8 @@ namespace ohms::wgc {
 CaptureCore::CaptureCore(
 	IDirect3DDevice const& device,
 	GraphicsCaptureItem const& item,
-	HWND targetWindow) :
+	HWND targetWindow
+) :
 	m_closed(false),
 
 	m_item(nullptr),
@@ -88,7 +92,9 @@ CaptureCore::CaptureCore(
 	m_img_needRefresh(false),
 	m_img_updated(false),
 
-	m_target_window(targetWindow) {
+	m_target_window(targetWindow)
+
+{
 	m_device = device;
 	m_item = item;
 
@@ -119,7 +125,6 @@ CaptureCore::~CaptureCore() {
 
 void CaptureCore::setClipToClientArea(bool enabled) {
 	m_img_clientarea = enabled;
-	return;
 }
 
 bool CaptureCore::isClipToClientArea() {
@@ -133,28 +138,23 @@ void CaptureCore::askForRefresh() {
 
 bool CaptureCore::isRefreshed() {
 	bool expected = true;
-	if (m_img_updated.compare_exchange_weak(expected, false)) {
+	if (m_img_updated.compare_exchange_weak(expected, false))
 		return true;
-	}
 	return false;
 }
 
 void CaptureCore::copyMat(cv::Mat& target, bool convertToBGR) {
 	std::lock_guard<std::mutex> lock(m_mutex_cap);
-	if (convertToBGR) {
+	if (convertToBGR)
 		cv::cvtColor(m_cap, target, cv::ColorConversionCodes::COLOR_BGRA2BGR, 3);
-	}
-	else {
+	else
 		m_cap.copyTo(target);
-	}
-	return;
 }
 
 // Start sending capture frames
 void CaptureCore::Open() {
-	if (m_closed.load() != true) {
+	if (m_closed.load() != true)
 		m_session.StartCapture();
-	}
 }
 
 // Process captured frames
@@ -176,7 +176,8 @@ void CaptureCore::Close() {
 
 void CaptureCore::OnFrameArrived(
 	Direct3D11CaptureFramePool const& sender,
-	winrt::Windows::Foundation::IInspectable const&) {
+	winrt::Windows::Foundation::IInspectable const&
+) {
 	const Direct3D11CaptureFrame frame = sender.TryGetNextFrame();
 	const SizeInt32 frameContentSize = frame.ContentSize();
 
@@ -195,12 +196,9 @@ void CaptureCore::OnFrameArrived(
 			client_clip_success = true;
 		}
 
-		if (m_lastTexSize.Width != desc.Width ||
-			m_lastTexSize.Height != desc.Height) {
-
+		if (m_lastTexSize.Width != desc.Width || m_lastTexSize.Height != desc.Height) {
 			m_lastTexSize.Width = desc.Width;
 			m_lastTexSize.Height = desc.Height;
-
 			m_texture->Release();
 			CreateTexture();
 		}
@@ -213,7 +211,6 @@ void CaptureCore::OnFrameArrived(
 		D3D11_MAPPED_SUBRESOURCE mappedTex;
 		m_d3dContext->Map(m_texture, 0, D3D11_MAP_READ, 0, &mappedTex);
 		m_d3dContext->Unmap(m_texture, 0);
-
 		{
 			std::lock_guard<std::mutex> lock(m_mutex_cap);
 			m_cap = cv::Mat(

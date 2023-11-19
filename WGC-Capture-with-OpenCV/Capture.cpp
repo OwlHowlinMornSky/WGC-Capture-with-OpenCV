@@ -13,9 +13,7 @@ inline bool CreateCaptureItemForWindow(winrt::Windows::Graphics::Capture::Graphi
 	auto activation_factory = winrt::get_activation_factory<winrt::Windows::Graphics::Capture::GraphicsCaptureItem>();
 	auto interop_factory = activation_factory.as<IGraphicsCaptureItemInterop>();
 	const auto res = interop_factory->CreateForWindow(hwnd, winrt::guid_of<ABI::Windows::Graphics::Capture::IGraphicsCaptureItem>(), winrt::put_abi(item));
-	if (res != S_OK)
-		return false;
-	return true;
+	return res == S_OK;
 }
 
 inline auto CreateD3DDevice(
@@ -40,9 +38,8 @@ inline auto CreateD3DDevice(
 inline auto CreateD3DDevice() {
 	winrt::com_ptr<ID3D11Device> device;
 	HRESULT hr = CreateD3DDevice(D3D_DRIVER_TYPE_HARDWARE, device);
-	if (DXGI_ERROR_UNSUPPORTED == hr) {
+	if (DXGI_ERROR_UNSUPPORTED == hr)
 		hr = CreateD3DDevice(D3D_DRIVER_TYPE_WARP, device);
-	}
 	winrt::check_hresult(hr);
 	return device;
 }
@@ -65,7 +62,9 @@ namespace ohms::wgc {
 Capture::Capture() :
 	m_device(nullptr),
 	m_capture(nullptr),
-	m_clipClientArea(false) {
+	m_clipClientArea(false)
+
+{
 	com_ptr<ID3D11Device> d3dDevice = CreateD3DDevice();
 	com_ptr<IDXGIDevice> dxgiDevice = d3dDevice.as<IDXGIDevice>();
 	m_device = CreateDirect3DDevice(dxgiDevice.get());
@@ -110,7 +109,6 @@ void Capture::setClipToClientArea(bool enabled) {
 	m_clipClientArea = enabled;
 	if (m_capture)
 		m_capture->setClipToClientArea(m_clipClientArea);
-	return;
 }
 
 bool Capture::isClipToClientArea() {
@@ -123,9 +121,8 @@ void Capture::askForRefresh() {
 }
 
 bool Capture::isRefreshed() {
-	if (m_capture) {
+	if (m_capture)
 		return m_capture->isRefreshed();
-	}
 	return false;
 }
 

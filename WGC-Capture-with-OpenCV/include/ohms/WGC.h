@@ -23,6 +23,20 @@ public:
 
 public:
 	/**
+	 * @brief 获取 截图控制器 实例。
+	 * @brief Get the instance of Capture Manager.
+	 * @return a pointer to the instance. It may be nullptr.
+	*/
+	static ICapture* getInstance();
+
+	/**
+	 * @brief 销毁 截图控制器 实例，并清理现场。
+	 * @brief Destroy the instance of Capture Manager and clear things about it.
+	*/
+	static void drop();
+
+public:
+	/**
 	 * @brief 开始捕获指定窗口
 	 * @brief Start capture the referred window.
 	 * @param hwnd: The referred window.
@@ -71,18 +85,6 @@ public:
 	*/
 	virtual bool copyMatTo(cv::Mat& target, bool convertToBGR = false) = 0;
 };
-
-/**
- * @brief 获取 截图控制器 实例。
- * @brief Get the instance of Capture Manager.
- * @return a pointer to the instance. It may be nullptr.
-*/
-WGCCAPTUREWITHOPENCV_API ICapture* getInstance();
-/**
- * @brief 销毁 截图控制器 实例，并清理现场。
- * @brief Destroy the instance of Capture Manager and clear things about it.
-*/
-WGCCAPTUREWITHOPENCV_API void drop();
 
 } // namespace wgc
 } // namespace ohms
