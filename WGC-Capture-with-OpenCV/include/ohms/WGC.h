@@ -25,6 +25,14 @@ public:
 
 public:
 	/**
+	 * @brief 构造 截图控制器 实例，可以指定 WinRT 是否已经初始化。
+	 * @brief Construct the instance of Capture Manager explicitly.
+	 * @param winrt_initialized: true if WinRT is already initialized.
+	 * @return true if succeed.
+	*/
+	static bool setup(bool winrt_initialized);
+
+	/**
 	 * @brief 获取 截图控制器 实例。
 	 * @brief Get the instance of Capture Manager.
 	 * @return a pointer to the instance. It may be nullptr.
