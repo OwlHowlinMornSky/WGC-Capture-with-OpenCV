@@ -35,6 +35,9 @@
     <ClInclude Include="include\ohms\WGC.h">
       <Filter>Export</Filter>
     </ClInclude>
+    <ClInclude Include="resource.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">
@@ -52,5 +55,8 @@
     <ClCompile Include="CaptureCore.cpp">
       <Filter>Things</Filter>
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="WGC-Capture-with-OpenCV.rc" />
   </ItemGroup>
 </Project>
