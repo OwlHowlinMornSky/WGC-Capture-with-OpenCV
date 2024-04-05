@@ -1,5 +1,9 @@
 # WGC-Capture-with-OpenCV
 
+WGC-Capture-with-OpenCV is Free/Libre.
+
+WGC-Capture-with-OpenCV 是 自由的。
+
 ## Features
 
 * Capture a window at one time using WGC;
