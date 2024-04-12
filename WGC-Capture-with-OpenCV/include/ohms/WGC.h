@@ -30,9 +30,7 @@
 #include <Windows.h>
 #include <opencv2/core/mat.hpp>
 
-#ifdef OHMS_WGC_USE_CALLBACK
 #include <functional>
-#endif // OHMS_WGC_USE_CALLBACK
 
 namespace ohms {
 namespace wgc {

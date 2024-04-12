@@ -62,12 +62,9 @@ int TestNormal() {
 	auto r_capture = ohms::wgc::ICapture::getInstance();
 	// Find Window.
 	HWND hwnd = FindWindowW(TargetWindowClass, TargetWindowName);
-	if (hwnd == NULL) {
-		return 1;
-	}
 
 	if (TestCaptureMonitor) {
-		HMONITOR hmonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONULL);
+		HMONITOR hmonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY);
 		if (hmonitor == NULL) {
 			return 2;
 		}
@@ -76,6 +73,9 @@ int TestNormal() {
 		}
 	}
 	else {
+		if (hwnd == NULL) {
+			return 1;
+		}
 		if (!IsWindow(hwnd) || IsIconic(hwnd)) { // Requirements for capture window.
 			return 4;
 		}
@@ -114,12 +114,9 @@ int TestCallback() {
 	auto r_capture = ohms::wgc::ICapture::getInstance();
 	// Find Window.
 	HWND hwnd = FindWindowW(TargetWindowClass, TargetWindowName);
-	if (hwnd == NULL) {
-		return 1;
-	}
 
 	if (TestCaptureMonitor) {
-		HMONITOR hmonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONULL);
+		HMONITOR hmonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY);
 		if (hmonitor == NULL) {
 			return 2;
 		}
@@ -128,6 +125,9 @@ int TestCallback() {
 		}
 	}
 	else {
+		if (hwnd == NULL) {
+			return 1;
+		}
 		if (!IsWindow(hwnd) || IsIconic(hwnd)) { // Requirements for capture window.
 			return 4;
 		}
