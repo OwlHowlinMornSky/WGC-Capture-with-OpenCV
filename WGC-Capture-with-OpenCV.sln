@@ -13,6 +13,9 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ExampleWin32", "ExampleWin3
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ExampleBasic", "ExampleBasic\ExampleBasic.vcxproj", "{DF2C7211-C422-40FB-9FA3-0F085CE2E93B}"
+	ProjectSection(ProjectDependencies) = postProject
+		{1C431419-2BE8-4024-839C-BF9455796663} = {1C431419-2BE8-4024-839C-BF9455796663}
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

@@ -94,7 +94,7 @@ namespace ohms::wgc {
 CaptureCore::CaptureCore(
 	IDirect3DDevice const& device,
 	GraphicsCaptureItem const& item,
-	HWND targetWindow
+	HWND targetWindow, bool freeThreaded, bool useCallback
 ) :
 	m_closed(false),
 
@@ -128,10 +128,70 @@ CaptureCore::CaptureCore(
 	m_lastSize = size;
 	m_lastTexSize = size;
 
-	m_framePool = Direct3D11CaptureFramePool::Create(m_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
+	if (freeThreaded || useCallback)
+		m_framePool = Direct3D11CaptureFramePool::CreateFreeThreaded(m_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
+	else
+		m_framePool = Direct3D11CaptureFramePool::Create(m_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
 
 	m_session = m_framePool.CreateCaptureSession(m_item);
-	m_frameArrived = m_framePool.FrameArrived(auto_revoke, { this, &CaptureCore::OnFrameArrived });
+	if (useCallback)
+		m_frameArrived = m_framePool.FrameArrived(auto_revoke, { this, &CaptureCore::OnFrameArrivedWithCallback });
+	else
+		m_frameArrived = m_framePool.FrameArrived(auto_revoke, { this, &CaptureCore::OnFrameArrived });
+
+	m_session.IsCursorCaptureEnabled(false);
+	m_session.IsBorderRequired(false);
+
+	CreateTexture();
+}
+
+CaptureCore::CaptureCore(
+	IDirect3DDevice const& device,
+	GraphicsCaptureItem const& item,
+	HMONITOR targetMonitor, bool freeThreaded, bool useCallback
+) :
+	m_closed(false),
+
+	m_item(nullptr),
+	m_framePool(nullptr),
+	m_session(nullptr),
+
+	m_device(nullptr),
+	m_d3dContext(nullptr),
+	m_d3dDevice(nullptr),
+
+	m_texture(nullptr),
+
+	m_img_clientarea(false),
+	m_img_needRefresh(false),
+	m_img_updated(false),
+
+	m_target_window(NULL)
+
+{
+	m_device = device;
+	m_item = item;
+
+	// Set up 
+	m_d3dDevice = ::GetDXGIInterfaceFromObject<ID3D11Device>(m_device);
+	m_d3dDevice->GetImmediateContext(m_d3dContext.put());
+
+	const SizeInt32 size = m_item.Size();
+
+	// Create framepool, define pixel format (DXGI_FORMAT_B8G8R8A8_UNORM), and frame size. 
+	m_lastSize = size;
+	m_lastTexSize = size;
+
+	if (freeThreaded || useCallback)
+		m_framePool = Direct3D11CaptureFramePool::CreateFreeThreaded(m_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
+	else
+		m_framePool = Direct3D11CaptureFramePool::Create(m_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
+
+	m_session = m_framePool.CreateCaptureSession(m_item);
+	if (useCallback)
+		m_frameArrived = m_framePool.FrameArrived(auto_revoke, { this, &CaptureCore::OnFrameArrivedWithCallback });
+	else
+		m_frameArrived = m_framePool.FrameArrived(auto_revoke, { this, &CaptureCore::OnFrameArrived });
 
 	m_session.IsCursorCaptureEnabled(false);
 	m_session.IsBorderRequired(false);
@@ -194,6 +254,10 @@ void CaptureCore::Close() {
 	}
 }
 
+void CaptureCore::SetCallback(std::function<void(const cv::Mat&)> cb) {
+	m_callback = cb;
+}
+
 void CaptureCore::OnFrameArrived(
 	Direct3D11CaptureFramePool const& sender,
 	winrt::Windows::Foundation::IInspectable const&
@@ -240,6 +304,55 @@ void CaptureCore::OnFrameArrived(
 		}
 		m_img_updated.store(true);
 	}
+
+	if (m_lastSize.Width != frameContentSize.Width ||
+		m_lastSize.Height != frameContentSize.Height) {
+		m_lastSize = frameContentSize;
+		m_framePool.Recreate(m_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
+	}
+}
+
+void CaptureCore::OnFrameArrivedWithCallback(
+	winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool const& sender,
+	winrt::Windows::Foundation::IInspectable const& args
+) {
+	const Direct3D11CaptureFrame frame = sender.TryGetNextFrame();
+	const SizeInt32 frameContentSize = frame.ContentSize();
+
+	com_ptr<ID3D11Texture2D> frameSurface = ::GetDXGIInterfaceFromObject<ID3D11Texture2D>(frame.Surface());
+
+	/* need GetDesc because ContentSize is not reliable */
+	D3D11_TEXTURE2D_DESC desc;
+	frameSurface->GetDesc(&desc);
+
+	bool client_clip_success = false;
+	if (m_img_clientarea && get_client_box(m_target_window, desc.Width, desc.Height, &m_client_box)) {
+		desc.Width = m_client_box.right - m_client_box.left;
+		desc.Height = m_client_box.bottom - m_client_box.top;
+		client_clip_success = true;
+	}
+
+	if (m_lastTexSize.Width != desc.Width || m_lastTexSize.Height != desc.Height) {
+		m_lastTexSize.Width = desc.Width;
+		m_lastTexSize.Height = desc.Height;
+		m_texture->Release();
+		CreateTexture();
+	}
+
+	if (client_clip_success)
+		m_d3dContext->CopySubresourceRegion(m_texture, 0, 0, 0, 0, frameSurface.get(), 0, &m_client_box);
+	else
+		m_d3dContext->CopyResource(m_texture, frameSurface.get());
+
+	D3D11_MAPPED_SUBRESOURCE mappedTex;
+	m_d3dContext->Map(m_texture, 0, D3D11_MAP_READ, 0, &mappedTex);
+	m_d3dContext->Unmap(m_texture, 0);
+	m_cap = cv::Mat(
+		m_lastTexSize.Height, m_lastTexSize.Width,
+		CV_8UC4, mappedTex.pData, mappedTex.RowPitch
+	);
+
+	m_callback(m_cap);
 
 	if (m_lastSize.Width != frameContentSize.Width ||
 		m_lastSize.Height != frameContentSize.Height) {

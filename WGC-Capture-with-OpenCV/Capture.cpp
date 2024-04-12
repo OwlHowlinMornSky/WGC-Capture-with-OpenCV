@@ -20,8 +20,7 @@
 */
 #include "pch.h"
 #include "Capture.h"
-
-#include <iostream>
+#include "CaptureCore.h"
 
 using namespace winrt;
 using namespace Windows::Foundation;
@@ -33,6 +32,13 @@ inline bool CreateCaptureItemForWindow(winrt::Windows::Graphics::Capture::Graphi
 	auto activation_factory = winrt::get_activation_factory<winrt::Windows::Graphics::Capture::GraphicsCaptureItem>();
 	auto interop_factory = activation_factory.as<IGraphicsCaptureItemInterop>();
 	const auto res = interop_factory->CreateForWindow(hwnd, winrt::guid_of<ABI::Windows::Graphics::Capture::IGraphicsCaptureItem>(), winrt::put_abi(item));
+	return res == S_OK;
+}
+
+inline bool CreateCaptureItemForMonitor(winrt::Windows::Graphics::Capture::GraphicsCaptureItem& item, HMONITOR hmonitor) {
+	auto activation_factory = winrt::get_activation_factory<winrt::Windows::Graphics::Capture::GraphicsCaptureItem>();
+	auto interop_factory = activation_factory.as<IGraphicsCaptureItemInterop>();
+	const auto res = interop_factory->CreateForMonitor(hmonitor, winrt::guid_of<ABI::Windows::Graphics::Capture::IGraphicsCaptureItem>(), winrt::put_abi(item));
 	return res == S_OK;
 }
 
@@ -82,7 +88,8 @@ namespace ohms::wgc {
 Capture::Capture() :
 	m_device(nullptr),
 	m_capture(nullptr),
-	m_clipClientArea(false)
+	m_clipClientArea(false),
+	m_isForMonitor(false)
 
 {
 	com_ptr<ID3D11Device> d3dDevice = CreateD3DDevice();
@@ -95,7 +102,7 @@ Capture::~Capture() {
 	m_capture.reset();
 }
 
-bool Capture::startCapture(HWND hwnd) {
+bool Capture::startCaptureWindow(HWND hwnd, bool freeThreaded) {
 	stopCapture();
 
 	GraphicsCaptureItem item = { nullptr };
@@ -104,10 +111,79 @@ bool Capture::startCapture(HWND hwnd) {
 		return false;
 	}
 
-	m_capture = std::make_unique<CaptureCore>(m_device, item, hwnd);
+	m_capture = std::make_unique<CaptureCore>(m_device, item, hwnd, freeThreaded, false);
+
+	m_isForMonitor = false;
 
 	if (m_clipClientArea)
 		m_capture->setClipToClientArea(m_clipClientArea);
+
+	m_capture->Open();
+
+	m_capture->askForRefresh();
+
+	return true;
+}
+
+bool Capture::startCaptureMonitor(HMONITOR hmonitor, bool freeThreaded) {
+	stopCapture();
+
+	GraphicsCaptureItem item = { nullptr };
+
+	if (!CreateCaptureItemForMonitor(item, hmonitor)) {
+		return false;
+	}
+
+	m_capture = std::make_unique<CaptureCore>(m_device, item, hmonitor, freeThreaded, false);
+
+	m_isForMonitor = true;
+
+	m_capture->Open();
+
+	m_capture->askForRefresh();
+
+	return true;
+}
+
+bool Capture::startCaptureWindowWithCallback(HWND hwnd, std::function<void(const cv::Mat&)> cb) {
+	stopCapture();
+
+	GraphicsCaptureItem item = { nullptr };
+
+	if (!CreateCaptureItemForWindow(item, hwnd)) {
+		return false;
+	}
+
+	m_capture = std::make_unique<CaptureCore>(m_device, item, hwnd, true, true);
+
+	m_isForMonitor = false;
+
+	if (m_clipClientArea)
+		m_capture->setClipToClientArea(m_clipClientArea);
+
+	m_capture->SetCallback(cb);
+
+	m_capture->Open();
+
+	m_capture->askForRefresh();
+
+	return true;
+}
+
+bool Capture::startCaptureMonitorWithCallback(HMONITOR hmonitor, std::function<void(const cv::Mat&)> cb) {
+	stopCapture();
+
+	GraphicsCaptureItem item = { nullptr };
+
+	if (!CreateCaptureItemForMonitor(item, hmonitor)) {
+		return false;
+	}
+
+	m_capture = std::make_unique<CaptureCore>(m_device, item, hmonitor, true, true);
+
+	m_isForMonitor = true;
+
+	m_capture->SetCallback(cb);
 
 	m_capture->Open();
 
@@ -121,18 +197,29 @@ void Capture::stopCapture() {
 		m_capture->Close();
 		m_capture.reset();
 	}
+	m_isForMonitor = false;
 }
 
 void Capture::setClipToClientArea(bool enabled) {
 	if (m_clipClientArea == enabled)
 		return;
 	m_clipClientArea = enabled;
+	if (m_isForMonitor) // 显示器不可以裁剪到客户区，故设置无效。
+		return;
 	if (m_capture)
 		m_capture->setClipToClientArea(m_clipClientArea);
 }
 
 bool Capture::isClipToClientArea() {
-	return m_clipClientArea;
+	return !m_isForMonitor && m_clipClientArea;
+}
+
+bool Capture::isRunning() {
+	return m_capture != nullptr;
+}
+
+bool Capture::isCaptureMonitor() {
+	return m_isForMonitor;
 }
 
 void Capture::askForRefresh() {

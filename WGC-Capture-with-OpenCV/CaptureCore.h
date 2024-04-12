@@ -28,6 +28,7 @@
 
 #include <mutex>
 #include <atomic>
+#include <functional>
 
 namespace ohms::wgc {
 
@@ -39,7 +40,12 @@ public:
 	CaptureCore(
 		winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice const& device,
 		winrt::Windows::Graphics::Capture::GraphicsCaptureItem const& item,
-		HWND targetWindow
+		HWND targetWindow, bool freeThreaded, bool useCallback
+	);
+	CaptureCore(
+		winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice const& device,
+		winrt::Windows::Graphics::Capture::GraphicsCaptureItem const& item,
+		HMONITOR targetMonitor, bool freeThreaded, bool useCallback
 	);
 
 	~CaptureCore();
@@ -74,12 +80,17 @@ public:
 public:
 	void Open();
 	void Close();
+	void SetCallback(std::function<void(const cv::Mat&)> cb);
 
 protected:
 	void OnFrameArrived(
 		winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool const& sender,
 		winrt::Windows::Foundation::IInspectable const& args
 	);
+	void OnFrameArrivedWithCallback(
+		winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool const& sender,
+		winrt::Windows::Foundation::IInspectable const& args
+	); // 注意这个方法不锁mat，不管needUpdate，也不设置updated。
 	void CreateTexture();
 
 protected:
@@ -98,9 +109,10 @@ protected:
 	winrt::Windows::Graphics::SizeInt32 m_lastSize;
 	winrt::Windows::Graphics::SizeInt32 m_lastTexSize;
 
-	std::atomic<bool> m_img_clientarea;
+	std::atomic<bool> m_img_clientarea; // 应当由Capture确保 在截取显示器时 不会为true。
 	std::atomic<bool> m_img_needRefresh;
 	std::atomic<bool> m_img_updated;
+	std::function<void(const cv::Mat&)> m_callback;
 
 	D3D11_BOX m_client_box;
 	HWND m_target_window;

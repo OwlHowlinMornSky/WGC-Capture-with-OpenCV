@@ -38,11 +38,17 @@ public:
 	virtual ~Capture() override;
 
 public:
-	virtual bool startCapture(HWND hwnd) override;
+	virtual bool startCaptureWindow(HWND hwnd, bool freeThreaded = true) override;
+	virtual bool startCaptureMonitor(HMONITOR hmonitor, bool freeThreaded = true) override;
+	virtual bool startCaptureWindowWithCallback(HWND hwnd, std::function<void(const cv::Mat&)> cb) override;
+	virtual bool startCaptureMonitorWithCallback(HMONITOR hmonitor, std::function<void(const cv::Mat&)> cb) override;
 	virtual void stopCapture() override;
 
 	virtual void setClipToClientArea(bool enabled) override;
 	virtual bool isClipToClientArea() override;
+
+	virtual bool isRunning() override;
+	virtual bool isCaptureMonitor() override;
 
 	virtual void askForRefresh() override;
 	virtual bool isRefreshed() override;
@@ -54,6 +60,7 @@ protected:
 	std::unique_ptr<CaptureCore> m_capture; // 截取器实例。
 
 	bool m_clipClientArea;
+	bool m_isForMonitor;
 };
 
 } // namespace ohms::wgc

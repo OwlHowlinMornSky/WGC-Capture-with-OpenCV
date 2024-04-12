@@ -20,14 +20,44 @@
 */
 
 // You can use Spy++ to get the info about target window.
-constexpr wchar_t TargetWindowName[] = L"ExampleName";
+constexpr wchar_t TargetWindowName[] = L"ExampleWindowName";
 constexpr wchar_t TargetWindowClass[] = L"ExampleClassName";
+constexpr bool    TestCaptureMonitor = true;
+constexpr bool    TestFreeThreaded = true;
 
+#define OHMS_WGC_USE_CALLBACK
 #include <ohms/WGC.h>
 #include <opencv2/opencv.hpp>
 #include <Windows.h>
 
-int main() {
+int TestNormal();
+int TestCallback();
+
+int main() { // You can switch the function.
+	//return TestNormal();
+	return TestCallback();
+}
+
+void Test(const cv::Mat& mat) {
+	if constexpr (TestCaptureMonitor) {
+		cv::Mat tmp;
+		mat.copyTo(tmp);
+		auto sz = tmp.size();
+		cv::resize(
+			tmp, tmp,
+			sz / 2,
+			0.0, 0.0, cv::InterpolationFlags::INTER_LINEAR
+		);
+		cv::imshow("show", tmp);
+		cv::waitKey(1);
+	}
+	else {
+		cv::imshow("show", mat);
+		cv::waitKey(1);
+	}
+}
+
+int TestNormal() {
 	// Initialization.
 	ohms::wgc::ICapture::setup(false);
 	auto r_capture = ohms::wgc::ICapture::getInstance();
@@ -36,36 +66,81 @@ int main() {
 	if (hwnd == NULL) {
 		return 1;
 	}
-	if (!IsWindow(hwnd) || IsIconic(hwnd)) { // Requirements for capture.
-		return 2;
+
+	if (TestCaptureMonitor) {
+		HMONITOR hmonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONULL);
+		if (hmonitor == NULL) {
+			return 2;
+		}
+		if (!r_capture->startCaptureMonitor(hmonitor, TestFreeThreaded)) {
+			return 3;
+		}
 	}
-	if (!r_capture->startCapture(hwnd)) {
-		return 3;
+	else {
+		if (!IsWindow(hwnd) || IsIconic(hwnd)) { // Requirements for capture window.
+			return 4;
+		}
+		r_capture->setClipToClientArea(true);
+		if (!r_capture->startCaptureWindow(hwnd, TestFreeThreaded)) {
+			return 5;
+		}
 	}
-	r_capture->setClipToClientArea(true);
+
 	// Run
 	r_capture->askForRefresh(); // Ask for the first.
 	MSG msg{ 0 };
-	size_t testCnt = 3300; // About 100 seconds.
+	size_t testCnt = 300; // About 10 seconds.
 	while (testCnt > 0) {
-		if (PeekMessageW(&msg, NULL, NULL, NULL, PM_REMOVE)) { // Neccessary for get frames.
-			TranslateMessage(&msg);
-			DispatchMessageW(&msg);
-		}
-		else {
-			if (r_capture->isRefreshed()) {
-				cv::Mat mat;
-				if (r_capture->copyMatTo(mat, false)) {
-					cv::imshow("show", mat);
-				}
-				r_capture->askForRefresh(); // Ask for next one.
+		if (r_capture->isRefreshed()) {
+			cv::Mat mat;
+			if (r_capture->copyMatTo(mat, false)) {
+				Test(mat);
 			}
-			Sleep(30);
-			--testCnt;
+			r_capture->askForRefresh(); // Ask for next one.
 		}
+		if constexpr (TestFreeThreaded)
+			Sleep(30);
+		else
+			cv::waitKey(30);
+		--testCnt;
 	}
 	// Clear.
 	ohms::wgc::ICapture::drop();
 	return 0;
 }
 
+int TestCallback() {
+	// Initialization.
+	ohms::wgc::ICapture::setup(false);
+	auto r_capture = ohms::wgc::ICapture::getInstance();
+	// Find Window.
+	HWND hwnd = FindWindowW(TargetWindowClass, TargetWindowName);
+	if (hwnd == NULL) {
+		return 1;
+	}
+
+	if (TestCaptureMonitor) {
+		HMONITOR hmonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONULL);
+		if (hmonitor == NULL) {
+			return 2;
+		}
+		if (!r_capture->startCaptureMonitorWithCallback(hmonitor, &Test)) {
+			return 3;
+		}
+	}
+	else {
+		if (!IsWindow(hwnd) || IsIconic(hwnd)) { // Requirements for capture window.
+			return 4;
+		}
+		r_capture->setClipToClientArea(true);
+		if (!r_capture->startCaptureWindowWithCallback(hwnd, &Test)) {
+			return 5;
+		}
+	}
+
+	int a;
+	std::cin >> a;
+
+	ohms::wgc::ICapture::drop();
+	return 0;
+}
