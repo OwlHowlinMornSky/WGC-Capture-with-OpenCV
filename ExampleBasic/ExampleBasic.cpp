@@ -25,7 +25,6 @@ constexpr wchar_t TargetWindowClass[] = L"ExampleClassName";
 constexpr bool    TestCaptureMonitor = true;
 constexpr bool    TestFreeThreaded = true;
 
-#define OHMS_WGC_USE_CALLBACK
 #include <ohms/WGC.h>
 #include <opencv2/opencv.hpp>
 #include <Windows.h>

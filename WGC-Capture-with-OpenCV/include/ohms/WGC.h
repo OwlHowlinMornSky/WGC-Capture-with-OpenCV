@@ -105,7 +105,6 @@ public:
 	 */
 	virtual bool startCaptureMonitor(HMONITOR hmonitor, bool freeThreaded = true) = 0;
 
-#ifdef OHMS_WGC_USE_CALLBACK
 	/**
 	 * @brief 开始捕获指定窗口。分离接收帧的线程，并以回调函数获取 cv::Mat。
 	 * @brief 注意：askForRefresh(), isRefreshed() 将无效。copyMatTo() 不再线程安全。
@@ -138,7 +137,6 @@ public:
 	 * 'true' if success.
 	 */
 	virtual bool startCaptureMonitorWithCallback(HMONITOR hmonitor, std::function<void(const cv::Mat&)> cb) = 0;
-#endif // OHMS_WGC_USE_CALLBACK
 
 	/**
 	 * @brief 停止捕获。如果未在捕获则无事发生。
