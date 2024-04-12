@@ -22,4 +22,4 @@ WGC-Capture-with-OpenCV 是 自由的。
 3. Add `wgc-capture.lib` (Release) or `wgc-capture-d.lib` (Debug) into *Additional Dependencies*.
 4. Include `ohms/WGC.h` at anywhere needed.
 5. Remember to copy necessary DLL files in `/bin`.
-6. Examples is available.
+6. Examples are available.
