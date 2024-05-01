@@ -37,6 +37,8 @@ int main() { // You can switch the function.
 	return TestCallback();
 }
 
+size_t cnt = 0;
+
 void Test(const cv::Mat& mat) {
 	if constexpr (TestCaptureMonitor) {
 		cv::Mat tmp;
@@ -54,6 +56,7 @@ void Test(const cv::Mat& mat) {
 		cv::imshow("show", mat);
 		cv::waitKey(1);
 	}
+	//cv::imwrite(std::string("test\\") + std::to_string(cnt++) + ".png", mat);
 }
 
 int TestNormal() {
@@ -88,19 +91,16 @@ int TestNormal() {
 	// Run
 	r_capture->askForRefresh(); // Ask for the first.
 	MSG msg{ 0 };
-	size_t testCnt = 300; // About 10 seconds.
+	size_t testCnt = 3000; // About 10 seconds.
 	while (testCnt > 0) {
 		if (r_capture->isRefreshed()) {
 			cv::Mat mat;
-			if (r_capture->copyMatTo(mat, false)) {
+			if (r_capture->copyMatTo(mat, true)) {
 				Test(mat);
 			}
 			r_capture->askForRefresh(); // Ask for next one.
 		}
-		if constexpr (TestFreeThreaded)
-			Sleep(30);
-		else
-			cv::waitKey(30);
+		Sleep(20);
 		--testCnt;
 	}
 	// Clear.
