@@ -1,8 +1,8 @@
 # WGC-Capture-with-OpenCV
 
-WGC-Capture-with-OpenCV is Free/Libre.
+WGC-Capture-with-OpenCV is [Free/Libre](https://www.gnu.org/philosophy/free-sw.en.html).
 
-WGC-Capture-with-OpenCV 是 自由的。
+WGC-Capture-with-OpenCV 是 [自由的](https://www.gnu.org/philosophy/free-sw.html)。
 
 ## Features
 
