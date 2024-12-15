@@ -243,7 +243,7 @@ LRESULT MainWindow::procedure(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 			if (IsWindow(dst)) {
 				if (!IsIconic(dst)) {
-					if (g_app->startCapture(dst)) {
+					if (g_app->startCaptureWindow(dst)) {
 						g_app->askForRefresh();
 						//ohms::global::g_app->setDecimationMode(isSample);
 						//ohms::global::g_app->setShowScale(scale);
