@@ -26,8 +26,8 @@
 #define WGCCAPTUREWITHOPENCV_API __declspec(dllimport)
 #endif
 
-#include <sdkddkver.h>
-#include <windef.h>
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
 #include <opencv2/core/mat.hpp>
 #include <memory>
 
