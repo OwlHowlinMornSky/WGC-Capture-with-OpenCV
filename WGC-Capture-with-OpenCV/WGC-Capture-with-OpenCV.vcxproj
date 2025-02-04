@@ -175,16 +175,16 @@
     <None Include="cpp.hint" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Capture.h" />
-    <ClInclude Include="CaptureCore.h" />
+    <ClInclude Include="Factory.h" />
+    <ClInclude Include="Capturer.h" />
     <ClInclude Include="framework.h" />
-    <ClInclude Include="include\ohms\WGC.h" />
+    <ClInclude Include="include\WGC\WGC.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Capture.cpp" />
-    <ClCompile Include="CaptureCore.cpp" />
+    <ClCompile Include="Factory.cpp" />
+    <ClCompile Include="Capturer.cpp" />
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="WGC.cpp" />
     <ClCompile Include="pch.cpp">
