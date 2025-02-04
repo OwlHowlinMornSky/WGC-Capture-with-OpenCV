@@ -19,15 +19,20 @@
 *    Tyler Parret True <mysteryworldgod@outlook.com><https://github.com/OwlHowlinMornSky>
 */
 #include "pch.h"
-#include "include/ohms/WGC.h"
-#include "Capture.h"
+#include "include/WGC/WGC.h"
+#include "Factory.h"
 
-namespace {
+namespace wgc {
 
-ohms::wgc::ICapture* g_instance{ nullptr };
+std::shared_ptr<IFactory> IFactory::createInstance(bool winrt_initialized) {
+	if (!winrt_initialized) {
+		winrt::init_apartment();
+	}
+	return std::make_shared<wgc::Factory>();
+}
 
-bool setupInstance(bool initialized) {
-	if (!initialized) {
+std::shared_ptr<IFactory> IFactory::createInstanceNoThrow(bool winrt_initialized) noexcept {
+	if (!winrt_initialized) {
 		try {
 			winrt::init_apartment();
 		}
@@ -38,37 +43,12 @@ bool setupInstance(bool initialized) {
 		}
 	}
 	try {
-		::g_instance = new ohms::wgc::Capture();
+		return std::make_shared<wgc::Factory>();
 	}
 	catch (...) {
 		MessageBoxW(NULL, L"Failed to create instance.", L"WGC: Init failed", MB_ICONERROR);
-		return false;
 	}
-	return true;
-}
-
-} // namespace
-
-namespace ohms {
-namespace wgc {
-
-bool ICapture::setup(bool winrt_initialized) {
-	if (!g_instance && !::setupInstance(winrt_initialized))
-		return false;
-	return true;
-}
-
-ICapture* ICapture::getInstance() {
-	return g_instance;
-}
-
-void ICapture::drop() {
-	if (g_instance) {
-		delete ::g_instance;
-		winrt::uninit_apartment();
-	}
-	return;
+	return nullptr;
 }
 
 } // namespace wgc
-} // namespace ohms

@@ -31,4 +31,10 @@
 #include "framework.h"
 #include <opencv2/opencv.hpp>
 
+#include <inspectable.h>
+#include <winrt/Windows.Foundation.h>
+#include <winrt/Windows.Graphics.Capture.h>
+#include <winrt/Windows.Graphics.DirectX.Direct3d11.h>
+#include <d3d11_4.h>
+
 #endif //PCH_H
