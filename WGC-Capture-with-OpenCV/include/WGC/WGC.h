@@ -39,6 +39,7 @@ class ICapturer;
 
 /**
  * @brief Interface of Capture Factory.
+ * @brief You COULD create multiple instance of this factory.
 */
 class WGCCAPTUREWITHOPENCV_API IFactory {
 protected:
@@ -49,7 +50,7 @@ public:
 public:
 	/**
 	 * @brief Create an instance of Capture Factory.
-	 * @brief Inner exception may be thrown.
+	 * @brief This function may throws.
 	 * @param com_initialized: Set true if COM is initialized. 
 	 * @return A pointer to the instance.
 	 */
@@ -63,10 +64,20 @@ public:
 	static std::shared_ptr<IFactory> createInstanceNoThrow(bool com_initialized) noexcept;
 
 public:
+	/**
+	 * @brief This function may throws.
+	 */
 	virtual std::weak_ptr<ICapturer> createCapturer() = 0;
+	/**
+	 * @brief This function may throws.
+	 */
 	virtual void destroyCapturer(std::weak_ptr<ICapturer> instance) = 0;
 };
 
+/**
+ * @brief Interface of Capturer.
+ * @brief Each factory COULD create multiple capturers.
+*/
 class WGCCAPTUREWITHOPENCV_API ICapturer {
 protected:
 	ICapturer() = default;
@@ -76,6 +87,8 @@ public:
 public:
 	/**
 	 * @brief Start capture the specified window.
+	 * @brief If it's capturing, it stops previous work and starts to new target.
+	 * @brief This function may throws.
 	 * @param hwnd: The specified window.
 	 * @param freeThreaded: Get frame on another thread or not.
 	 * @return 'true' if succeed.
@@ -83,6 +96,8 @@ public:
 	virtual bool startCaptureWindow(HWND hwnd, bool freeThreaded = true) = 0;
 	/**
 	 * @brief Start capture the specified monitor.
+	 * @brief If it's capturing, it stops previous work and starts to new target.
+	 * @brief This function may throws.
 	 * @param hwnd: The specified monitor.
 	 * @param freeThreaded: Get frame on another thread or not.
 	 * @return 'true' if succeed.
@@ -91,7 +106,9 @@ public:
 
 	/**
 	 * @brief Start capture the specified window. Get cv::Mat by callback function on another thread.
-	 * @brief Notice: askForRefresh(), isRefreshed() will be useless, and copyMatTo() is not thread-safe then。
+	 * @brief If it's capturing, it stops previous work and starts to new target.
+	 * @brief Notice: askForRefresh(), isRefreshed() will be useless, and copyMatTo() will be non-thread-safe.
+	 * @brief This function may throws.
 	 * @param hwnd: The specified window.
 	 * @param cb: The callback function.
 	 * @return 'true' if succeed.
@@ -99,7 +116,9 @@ public:
 	virtual bool startCaptureWindowWithCallback(HWND hwnd, std::function<void(const cv::Mat&)> cb) = 0;
 	/**
 	 * @brief Start capture the specified monitor. Get cv::Mat by callback function on another thread.
-	 * @brief Notice: askForRefresh(), isRefreshed() will be useless, and copyMatTo() is not thread-safe then。
+	 * @brief If it's capturing, it stops previous work and starts to new target.
+	 * @brief Notice: askForRefresh(), isRefreshed() will be useless, and copyMatTo() will be non-thread-safe.
+	 * @brief This function may throws.
 	 * @param hwnd: The specified monitor.
 	 * @param cb: The callback function.
 	 * @return 'true' if succeed.
@@ -108,6 +127,7 @@ public:
 
 	/**
 	 * @brief Stop capture. Nothing will happend if it's not capturing.
+	 * @brief This function may throws.
 	*/
 	virtual void stopCapture() = 0;
 
@@ -128,6 +148,10 @@ public:
 	 * @return 'true' if capturing.
 	 */
 	virtual bool isCapturing() = 0;
+	/**
+	 * @brief Query if it has been set to capturing a window.
+	 * @return 'true' if a window now is captured.
+	*/
 	virtual bool isCaptureWindow() = 0;
 	/**
 	 * @brief Query if it has been set to capturing a monitor.
@@ -154,6 +178,10 @@ public:
 	*/
 	virtual void copyMatTo(cv::Mat& target, bool convertToBGR = false) = 0;
 
+	/**
+	 * @brief Every instance of capturer have an unique id to others.
+	 * @brief This is used by factory to clean.
+	 */
 	virtual size_t getId() const = 0;
 };
 
