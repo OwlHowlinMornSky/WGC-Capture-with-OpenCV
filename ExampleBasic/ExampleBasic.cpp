@@ -25,16 +25,16 @@ constexpr wchar_t TargetWindowClass[] = L"ExampleClassName";
 constexpr bool    TestCaptureMonitor = true;
 constexpr bool    TestFreeThreaded = true;
 
-#include <ohms/WGC.h>
 #include <opencv2/opencv.hpp>
 #include <Windows.h>
+#include <WGC/WGC.h>
 
 int TestNormal();
 int TestCallback();
 
 int main() { // You can switch the function.
-	//return TestNormal();
-	return TestCallback();
+	return TestNormal();
+	//return TestCallback();
 }
 
 size_t cnt = 0;
@@ -59,19 +59,41 @@ void Test(const cv::Mat& mat) {
 	//cv::imwrite(std::string("test\\") + std::to_string(cnt++) + ".png", mat);
 }
 
+void Test2(const cv::Mat& mat) {
+	if constexpr (TestCaptureMonitor) {
+		cv::Mat tmp;
+		mat.copyTo(tmp);
+		auto sz = tmp.size();
+		cv::resize(
+			tmp, tmp,
+			sz / 2,
+			0.0, 0.0, cv::InterpolationFlags::INTER_LINEAR
+		);
+		cv::imshow("show2", tmp);
+		cv::waitKey(1);
+	}
+	else {
+		cv::imshow("show2", mat);
+		cv::waitKey(1);
+	}
+	//cv::imwrite(std::string("test\\") + std::to_string(cnt++) + ".png", mat);
+}
+
 int TestNormal() {
 	// Initialization.
-	ohms::wgc::ICapture::setup(false);
-	auto r_capture = ohms::wgc::ICapture::getInstance();
+	auto factory = wgc::IFactory::createInstance(false);
+	auto capture1 = factory->createCapturer().lock();
+	auto capture2 = factory->createCapturer().lock();
 	// Find Window.
 	HWND hwnd = FindWindowW(TargetWindowClass, TargetWindowName);
+	HWND hwnd2 = FindWindowW(TargetWindowClass, TargetWindowName2);
 
-	if (TestCaptureMonitor) {
+	if constexpr (TestCaptureMonitor) {
 		HMONITOR hmonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY);
 		if (hmonitor == NULL) {
 			return 2;
 		}
-		if (!r_capture->startCaptureMonitor(hmonitor, TestFreeThreaded)) {
+		if (!capture1->startCaptureMonitor(hmonitor, TestFreeThreaded)) {
 			return 3;
 		}
 	}
@@ -82,45 +104,58 @@ int TestNormal() {
 		if (!IsWindow(hwnd) || IsIconic(hwnd)) { // Requirements for capture window.
 			return 4;
 		}
-		r_capture->setClipToClientArea(true);
-		if (!r_capture->startCaptureWindow(hwnd, TestFreeThreaded)) {
+		capture1->setClipToClientArea(true);
+		capture2->setClipToClientArea(true);
+		if (!capture1->startCaptureWindow(hwnd, TestFreeThreaded)) {
 			return 5;
 		}
+		if (!capture2->startCaptureWindow(hwnd2, TestFreeThreaded)) {
+			return 6;
+	}
 	}
 
 	// Run
-	r_capture->askForRefresh(); // Ask for the first.
+	capture1->askForRefresh(); // Ask for the first.
+	capture2->askForRefresh(); // Ask for the first.
 	MSG msg{ 0 };
 	size_t testCnt = 3000; // About 10 seconds.
 	while (testCnt > 0) {
-		if (r_capture->isRefreshed()) {
+		if (capture1->isRefreshed()) {
 			cv::Mat mat;
-			if (r_capture->copyMatTo(mat, true)) {
+			capture1->copyMatTo(mat, true);
 				Test(mat);
+			capture1->askForRefresh(); // Ask for next one.
 			}
-			r_capture->askForRefresh(); // Ask for next one.
+		if (capture2->isRefreshed()) {
+			cv::Mat mat;
+			capture2->copyMatTo(mat, true);
+			Test2(mat);
+			capture2->askForRefresh(); // Ask for next one.
 		}
-		Sleep(20);
-		--testCnt;
+		cv::waitKey(20);
+		//--testCnt;
 	}
 	// Clear.
-	ohms::wgc::ICapture::drop();
+	//wgc::ICapture::drop();
 	return 0;
 }
 
 int TestCallback() {
 	// Initialization.
-	ohms::wgc::ICapture::setup(false);
-	auto r_capture = ohms::wgc::ICapture::getInstance();
+	auto factory = wgc::IFactory::createInstance(false);
+	auto capture1 = factory->createCapturer().lock();
+	auto capture2 = factory->createCapturer().lock();
 	// Find Window.
 	HWND hwnd = FindWindowW(TargetWindowClass, TargetWindowName);
+	HWND hwnd2 = FindWindowW(TargetWindowClass, TargetWindowName2);
 
-	if (TestCaptureMonitor) {
+	if constexpr (TestCaptureMonitor) {
 		HMONITOR hmonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY);
 		if (hmonitor == NULL) {
 			return 2;
 		}
-		if (!r_capture->startCaptureMonitorWithCallback(hmonitor, &Test)) {
+
+		if (!capture1->startCaptureMonitorWithCallback(hmonitor, &Test)) {
 			return 3;
 		}
 	}
@@ -131,15 +166,19 @@ int TestCallback() {
 		if (!IsWindow(hwnd) || IsIconic(hwnd)) { // Requirements for capture window.
 			return 4;
 		}
-		r_capture->setClipToClientArea(true);
-		if (!r_capture->startCaptureWindowWithCallback(hwnd, &Test)) {
+		capture1->setClipToClientArea(true);
+		capture2->setClipToClientArea(true);
+		if (!capture1->startCaptureWindowWithCallback(hwnd, &Test)) {
 			return 5;
+		}
+		if (!capture2->startCaptureWindowWithCallback(hwnd2, &Test2)) {
+			return 6;
 		}
 	}
 
 	int a;
 	std::cin >> a;
 
-	ohms::wgc::ICapture::drop();
+	//wgc::ICapture::drop();
 	return 0;
 }

@@ -1,7 +1,7 @@
 ﻿/*
 *    WGC-Capture-with-OpenCV
 *
-*     Copyright 2023-2024  Tyler Parret True
+*     Copyright 2023-2025  Tyler Parret True
 *
 *    Licensed under the Apache License, Version 2.0 (the "License");
 *    you may not use this file except in compliance with the License.
@@ -19,15 +19,16 @@
 *    Tyler Parret True <mysteryworldgod@outlook.com><https://github.com/OwlHowlinMornSky>
 */
 #include "pch.h"
-#include "CaptureCore.h"
+#include "Capturer.h"
+#include <windows.graphics.capture.interop.h>
 #include <dwmapi.h>
 
 using namespace winrt;
-using namespace Windows::Foundation;
-using namespace Windows::Graphics;
-using namespace Windows::Graphics::Capture;
-using namespace Windows::Graphics::DirectX;
-using namespace Windows::Graphics::DirectX::Direct3D11;
+using namespace winrt::Windows::Foundation;
+using namespace winrt::Windows::Graphics;
+using namespace winrt::Windows::Graphics::Capture;
+using namespace winrt::Windows::Graphics::DirectX;
+using namespace winrt::Windows::Graphics::DirectX::Direct3D11;
 
 namespace {
 
@@ -87,35 +88,57 @@ bool get_client_box(HWND window, uint32_t width, uint32_t height, D3D11_BOX* cli
 	return client_box_available;
 }
 
+inline bool CreateCaptureItemForWindow(GraphicsCaptureItem& item, HWND hwnd) {
+	auto activation_factory = get_activation_factory<GraphicsCaptureItem>();
+	auto interop_factory = activation_factory.as<IGraphicsCaptureItemInterop>();
+	const auto res = interop_factory->CreateForWindow(hwnd, guid_of<IGraphicsCaptureItem>(), put_abi(item));
+	return res == S_OK;
+}
+
+inline bool CreateCaptureItemForMonitor(GraphicsCaptureItem& item, HMONITOR hmonitor) {
+	auto activation_factory = get_activation_factory<GraphicsCaptureItem>();
+	auto interop_factory = activation_factory.as<IGraphicsCaptureItemInterop>();
+	const auto res = interop_factory->CreateForMonitor(hmonitor, guid_of<IGraphicsCaptureItem>(), put_abi(item));
+	return res == S_OK;
+}
+
 } // namespace 
 
-namespace ohms::wgc {
+namespace wgc {
 
-CaptureCore::CaptureCore(
-	IDirect3DDevice const& device,
-	GraphicsCaptureItem const& item,
-	HWND targetWindow, bool freeThreaded, bool useCallback
-) :
-	m_closed(false),
+Capturer::Capturer(IDirect3DDevice const& device, size_t id) :
+	m_id(id),
 
 	m_item(nullptr),
 	m_framePool(nullptr),
 	m_session(nullptr),
 
-	m_device(nullptr),
+	m_texture(nullptr),
+	m_lastSize(),
+	m_lastTexSize(),
+
+	m_device(device),
 	m_d3dContext(nullptr),
 	m_d3dDevice(nullptr),
-
-	m_texture(nullptr),
 
 	m_img_clientarea(false),
 	m_img_needRefresh(false),
 	m_img_updated(false),
 
-	m_target_window(targetWindow)
+	m_client_box(),
+	m_target_window(NULL),
+	m_target_monitor(NULL) {}
 
-{
-	m_device = device;
+Capturer::~Capturer() {
+	stopCapture();
+}
+
+bool Capturer::startCaptureWindow(HWND hwnd, bool freeThreaded) {
+	stopCapture();
+
+	GraphicsCaptureItem item = { nullptr };
+	if (!CreateCaptureItemForWindow(item, hwnd))
+		return false;
 	m_item = item;
 
 	// Set up 
@@ -123,53 +146,35 @@ CaptureCore::CaptureCore(
 	m_d3dDevice->GetImmediateContext(m_d3dContext.put());
 
 	const SizeInt32 size = m_item.Size();
-
 	// Create framepool, define pixel format (DXGI_FORMAT_B8G8R8A8_UNORM), and frame size. 
 	m_lastSize = size;
 	m_lastTexSize = size;
 
-	if (freeThreaded || useCallback)
+	if (freeThreaded)
 		m_framePool = Direct3D11CaptureFramePool::CreateFreeThreaded(m_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
 	else
 		m_framePool = Direct3D11CaptureFramePool::Create(m_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
 
 	m_session = m_framePool.CreateCaptureSession(m_item);
-	if (useCallback)
-		m_frameArrived = m_framePool.FrameArrived(auto_revoke, { this, &CaptureCore::OnFrameArrivedWithCallback });
-	else
-		m_frameArrived = m_framePool.FrameArrived(auto_revoke, { this, &CaptureCore::OnFrameArrived });
+	m_frameArrived = m_framePool.FrameArrived(auto_revoke, { this, &Capturer::OnFrameArrived });
 
 	m_session.IsCursorCaptureEnabled(false);
 	m_session.IsBorderRequired(false);
 
 	CreateTexture();
+
+	m_session.StartCapture();
+	askForRefresh();
+	m_target_window = hwnd;
+	return true;
 }
 
-CaptureCore::CaptureCore(
-	IDirect3DDevice const& device,
-	GraphicsCaptureItem const& item,
-	HMONITOR targetMonitor, bool freeThreaded, bool useCallback
-) :
-	m_closed(false),
+bool Capturer::startCaptureMonitor(HMONITOR hmonitor, bool freeThreaded) {
+	stopCapture();
 
-	m_item(nullptr),
-	m_framePool(nullptr),
-	m_session(nullptr),
-
-	m_device(nullptr),
-	m_d3dContext(nullptr),
-	m_d3dDevice(nullptr),
-
-	m_texture(nullptr),
-
-	m_img_clientarea(false),
-	m_img_needRefresh(false),
-	m_img_updated(false),
-
-	m_target_window(NULL)
-
-{
-	m_device = device;
+	GraphicsCaptureItem item = { nullptr };
+	if (!CreateCaptureItemForMonitor(item, hmonitor))
+		return false;
 	m_item = item;
 
 	// Set up 
@@ -177,53 +182,157 @@ CaptureCore::CaptureCore(
 	m_d3dDevice->GetImmediateContext(m_d3dContext.put());
 
 	const SizeInt32 size = m_item.Size();
-
 	// Create framepool, define pixel format (DXGI_FORMAT_B8G8R8A8_UNORM), and frame size. 
 	m_lastSize = size;
 	m_lastTexSize = size;
 
-	if (freeThreaded || useCallback)
+	if (freeThreaded)
 		m_framePool = Direct3D11CaptureFramePool::CreateFreeThreaded(m_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
 	else
 		m_framePool = Direct3D11CaptureFramePool::Create(m_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
 
 	m_session = m_framePool.CreateCaptureSession(m_item);
-	if (useCallback)
-		m_frameArrived = m_framePool.FrameArrived(auto_revoke, { this, &CaptureCore::OnFrameArrivedWithCallback });
-	else
-		m_frameArrived = m_framePool.FrameArrived(auto_revoke, { this, &CaptureCore::OnFrameArrived });
+	m_frameArrived = m_framePool.FrameArrived(auto_revoke, { this, &Capturer::OnFrameArrived });
 
 	m_session.IsCursorCaptureEnabled(false);
 	m_session.IsBorderRequired(false);
 
 	CreateTexture();
+
+	m_session.StartCapture();
+	askForRefresh();
+	m_target_monitor = hmonitor;
+	return true;
 }
 
-CaptureCore::~CaptureCore() {
-	Close();
+bool Capturer::startCaptureWindowWithCallback(HWND hwnd, std::function<void(const cv::Mat&)> cb) {
+	stopCapture();
+
+	GraphicsCaptureItem item = { nullptr };
+	if (!CreateCaptureItemForWindow(item, hwnd))
+		return false;
+	m_item = item;
+
+	// Set up 
+	m_d3dDevice = ::GetDXGIInterfaceFromObject<ID3D11Device>(m_device);
+	m_d3dDevice->GetImmediateContext(m_d3dContext.put());
+
+	const SizeInt32 size = m_item.Size();
+	// Create framepool, define pixel format (DXGI_FORMAT_B8G8R8A8_UNORM), and frame size. 
+	m_lastSize = size;
+	m_lastTexSize = size;
+
+	m_framePool = Direct3D11CaptureFramePool::CreateFreeThreaded(m_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
+
+	m_session = m_framePool.CreateCaptureSession(m_item);
+	m_frameArrived = m_framePool.FrameArrived(auto_revoke, { this, &Capturer::OnFrameArrivedWithCallback });
+
+	m_session.IsCursorCaptureEnabled(false);
+	m_session.IsBorderRequired(false);
+
+	CreateTexture();
+
+	m_callback = cb;
+	m_session.StartCapture();
+	askForRefresh();
+	m_target_window = hwnd;
+	return true;
 }
 
-void CaptureCore::setClipToClientArea(bool enabled) {
+bool Capturer::startCaptureMonitorWithCallback(HMONITOR hmonitor, std::function<void(const cv::Mat&)> cb) {
+	stopCapture();
+
+	GraphicsCaptureItem item = { nullptr };
+	if (!CreateCaptureItemForMonitor(item, hmonitor))
+		return false;
+	m_item = item;
+
+	// Set up 
+	m_d3dDevice = ::GetDXGIInterfaceFromObject<ID3D11Device>(m_device);
+	m_d3dDevice->GetImmediateContext(m_d3dContext.put());
+
+	const SizeInt32 size = m_item.Size();
+	// Create framepool, define pixel format (DXGI_FORMAT_B8G8R8A8_UNORM), and frame size. 
+	m_lastSize = size;
+	m_lastTexSize = size;
+
+	m_framePool = Direct3D11CaptureFramePool::CreateFreeThreaded(m_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
+
+	m_session = m_framePool.CreateCaptureSession(m_item);
+	m_frameArrived = m_framePool.FrameArrived(auto_revoke, { this, &Capturer::OnFrameArrivedWithCallback });
+
+	m_session.IsCursorCaptureEnabled(false);
+	m_session.IsBorderRequired(false);
+
+	CreateTexture();
+
+	m_callback = cb;
+	m_session.StartCapture();
+	askForRefresh();
+	m_target_monitor = hmonitor;
+	return true;
+}
+
+void Capturer::stopCapture() {
+	if (NULL == m_target_window && NULL == m_target_monitor)
+		return;
+	std::lock_guard lockProc(m_mutex_proc);
+
+	m_target_window = NULL;
+	m_target_monitor = NULL;
+
+	m_frameArrived.revoke();
+	m_framePool.Close();
+	m_session.Close();
+
+	m_texture->Release();
+	m_texture = nullptr;
+
+	m_framePool = nullptr;
+	m_session = nullptr;
+	m_item = nullptr;
+
+	m_d3dContext->Release();
+	m_d3dDevice->Release();
+	m_d3dContext = nullptr;
+	m_d3dDevice = nullptr;
+
+	m_img_clientarea = false;
+}
+
+void Capturer::setClipToClientArea(bool enabled) {
 	m_img_clientarea = enabled;
 }
 
-bool CaptureCore::isClipToClientArea() {
+bool Capturer::isClipToClientArea() {
 	return m_img_clientarea;
 }
 
-void CaptureCore::askForRefresh() {
+bool Capturer::isCapturing() {
+	return m_target_window != NULL || m_target_monitor != NULL;
+}
+
+bool Capturer::isCaptureWindow() {
+	return m_target_window != NULL;
+}
+
+bool Capturer::isCaptureMonitor() {
+	return m_target_monitor != NULL;
+}
+
+void Capturer::askForRefresh() {
 	m_img_updated.store(false);
 	return m_img_needRefresh.store(true);
 }
 
-bool CaptureCore::isRefreshed() {
+bool Capturer::isRefreshed() {
 	bool expected = true;
 	if (m_img_updated.compare_exchange_weak(expected, false))
 		return true;
 	return false;
 }
 
-void CaptureCore::copyMat(cv::Mat& target, bool convertToBGR) {
+void Capturer::copyMatTo(cv::Mat& target, bool convertToBGR) {
 	std::lock_guard<std::mutex> lock(m_mutex_cap);
 	if (convertToBGR)
 		cv::cvtColor(m_cap, target, cv::ColorConversionCodes::COLOR_BGRA2BGR, 3);
@@ -231,37 +340,16 @@ void CaptureCore::copyMat(cv::Mat& target, bool convertToBGR) {
 		m_cap.copyTo(target);
 }
 
-// Start sending capture frames
-void CaptureCore::Open() {
-	if (m_closed.load() != true)
-		m_session.StartCapture();
+size_t Capturer::getId() const {
+	return m_id;
 }
 
-// Process captured frames
-void CaptureCore::Close() {
-	bool expected = false;
-	if (m_closed.compare_exchange_strong(expected, true)) {
-		m_frameArrived.revoke();
-		m_framePool.Close();
-		m_session.Close();
-
-		m_texture->Release();
-		m_texture = nullptr;
-
-		m_framePool = nullptr;
-		m_session = nullptr;
-		m_item = nullptr;
-	}
-}
-
-void CaptureCore::SetCallback(std::function<void(const cv::Mat&)> cb) {
-	m_callback = cb;
-}
-
-void CaptureCore::OnFrameArrived(
+void Capturer::OnFrameArrived(
 	Direct3D11CaptureFramePool const& sender,
 	winrt::Windows::Foundation::IInspectable const&
 ) {
+	std::lock_guard lockProc(m_mutex_proc);
+
 	const Direct3D11CaptureFrame frame = sender.TryGetNextFrame();
 	const SizeInt32 frameContentSize = frame.ContentSize();
 
@@ -274,7 +362,7 @@ void CaptureCore::OnFrameArrived(
 		frameSurface->GetDesc(&desc);
 
 		bool client_clip_success = false;
-		if (m_img_clientarea && get_client_box(m_target_window, desc.Width, desc.Height, &m_client_box)) {
+		if (m_img_clientarea && NULL != m_target_window && get_client_box(m_target_window, desc.Width, desc.Height, &m_client_box)) {
 			desc.Width = m_client_box.right - m_client_box.left;
 			desc.Height = m_client_box.bottom - m_client_box.top;
 			client_clip_success = true;
@@ -283,7 +371,6 @@ void CaptureCore::OnFrameArrived(
 		if (m_lastTexSize.Width != desc.Width || m_lastTexSize.Height != desc.Height) {
 			m_lastTexSize.Width = desc.Width;
 			m_lastTexSize.Height = desc.Height;
-			m_texture->Release();
 			CreateTexture();
 		}
 
@@ -296,7 +383,7 @@ void CaptureCore::OnFrameArrived(
 		m_d3dContext->Map(m_texture, 0, D3D11_MAP_READ, 0, &mappedTex);
 		m_d3dContext->Unmap(m_texture, 0);
 		{
-			std::lock_guard<std::mutex> lock(m_mutex_cap);
+			std::lock_guard lock(m_mutex_cap);
 			m_cap = cv::Mat(
 				m_lastTexSize.Height, m_lastTexSize.Width,
 				CV_8UC4, mappedTex.pData, mappedTex.RowPitch
@@ -312,10 +399,12 @@ void CaptureCore::OnFrameArrived(
 	}
 }
 
-void CaptureCore::OnFrameArrivedWithCallback(
+void Capturer::OnFrameArrivedWithCallback(
 	winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool const& sender,
 	winrt::Windows::Foundation::IInspectable const& args
 ) {
+	std::lock_guard lockProc(m_mutex_proc);
+
 	const Direct3D11CaptureFrame frame = sender.TryGetNextFrame();
 	const SizeInt32 frameContentSize = frame.ContentSize();
 
@@ -326,7 +415,7 @@ void CaptureCore::OnFrameArrivedWithCallback(
 	frameSurface->GetDesc(&desc);
 
 	bool client_clip_success = false;
-	if (m_img_clientarea && get_client_box(m_target_window, desc.Width, desc.Height, &m_client_box)) {
+	if (m_img_clientarea && NULL != m_target_window && get_client_box(m_target_window, desc.Width, desc.Height, &m_client_box)) {
 		desc.Width = m_client_box.right - m_client_box.left;
 		desc.Height = m_client_box.bottom - m_client_box.top;
 		client_clip_success = true;
@@ -335,7 +424,6 @@ void CaptureCore::OnFrameArrivedWithCallback(
 	if (m_lastTexSize.Width != desc.Width || m_lastTexSize.Height != desc.Height) {
 		m_lastTexSize.Width = desc.Width;
 		m_lastTexSize.Height = desc.Height;
-		m_texture->Release();
 		CreateTexture();
 	}
 
@@ -361,7 +449,12 @@ void CaptureCore::OnFrameArrivedWithCallback(
 	}
 }
 
-inline void CaptureCore::CreateTexture() {
+inline void Capturer::CreateTexture() {
+	if (m_texture) {
+		m_texture->Release();
+		m_texture = nullptr;
+	}
+
 	D3D11_TEXTURE2D_DESC desc = { 0 };
 	desc.MipLevels = 1;
 	desc.ArraySize = 1;
@@ -377,4 +470,4 @@ inline void CaptureCore::CreateTexture() {
 	m_d3dDevice.get()->CreateTexture2D(&desc, nullptr, &m_texture);
 }
 
-} // namespace ohms::wgc
+} // namespace wgc

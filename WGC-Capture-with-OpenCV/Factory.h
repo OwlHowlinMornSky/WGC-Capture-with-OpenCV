@@ -18,8 +18,28 @@
 * @Authors
 *    Tyler Parret True <mysteryworldgod@outlook.com><https://github.com/OwlHowlinMornSky>
 */
-// pch.cpp: 与预编译标头对应的源文件
+#pragma once
 
 #include "pch.h"
 
-// 当使用预编译的头时，需要使用此源文件，编译才能成功。
+#include "include/WGC/WGC.h"
+#include <map>
+
+namespace wgc {
+
+class Factory final :
+	public IFactory {
+public:
+	Factory();
+	virtual ~Factory() override;
+
+public:
+	virtual std::weak_ptr<ICapturer> createCapturer() override;
+	virtual void destroyCapturer(std::weak_ptr<ICapturer> instance) override;
+
+protected:
+	winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice m_device;
+	std::map<size_t, std::shared_ptr<ICapturer>> m_capturers;
+};
+
+} // namespace wgc

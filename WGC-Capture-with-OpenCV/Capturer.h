@@ -1,7 +1,7 @@
 ﻿/*
 *    WGC-Capture-with-OpenCV
 *
-*     Copyright 2023-2024  Tyler Parret True
+*     Copyright 2023-2025  Tyler Parret True
 *
 *    Licensed under the Apache License, Version 2.0 (the "License");
 *    you may not use this file except in compliance with the License.
@@ -20,67 +20,47 @@
 */
 #pragma once
 
-#include <inspectable.h>
-#include <winrt/Windows.Foundation.h>
-#include <winrt/Windows.Graphics.Capture.h>
-#include <winrt/Windows.Graphics.DirectX.Direct3d11.h>
-#include <d3d11_4.h>
+#include "pch.h"
 
 #include <mutex>
 #include <atomic>
 #include <functional>
+#include "include/WGC/WGC.h"
 
-namespace ohms::wgc {
+namespace wgc {
 
 /**
  * @brief 截取器。
 */
-class CaptureCore final {
+class Capturer final :
+	public ICapturer {
 public:
-	CaptureCore(
-		winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice const& device,
-		winrt::Windows::Graphics::Capture::GraphicsCaptureItem const& item,
-		HWND targetWindow, bool freeThreaded, bool useCallback
-	);
-	CaptureCore(
-		winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice const& device,
-		winrt::Windows::Graphics::Capture::GraphicsCaptureItem const& item,
-		HMONITOR targetMonitor, bool freeThreaded, bool useCallback
-	);
+	Capturer(winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice const& device, size_t id);
 
-	~CaptureCore();
+	~Capturer();
 
 public:
-	/**
-	 * @brief 设置截取客户区。
-	 * @param enabled: 是否截取客户区。
-	*/
-	void setClipToClientArea(bool enabled);
-	/**
-	 * @brief 是否已设为截取客户区。
-	 * @return true 则 已设为截取客户区。
-	*/
-	bool isClipToClientArea();
+	virtual bool startCaptureWindow(HWND hwnd, bool freeThreaded = true) override;
+	virtual bool startCaptureMonitor(HMONITOR hmonitor, bool freeThreaded = true) override;
 
-	/**
-	 * @brief 请求刷新 cv::Mat。
-	*/
-	void askForRefresh();
-	/**
-	 * @brief 是否已经刷新 cv::Mat。
-	 * @return ture 则 已经刷新。
-	*/
-	bool isRefreshed();
-	/**
-	 * @brief 获取当前 cv::Mat。
-	 * @param target: 保存位置。
-	*/
-	void copyMat(cv::Mat& target, bool convertToBGR);
+	virtual bool startCaptureWindowWithCallback(HWND hwnd, std::function<void(const cv::Mat&)> cb) override;
+	virtual bool startCaptureMonitorWithCallback(HMONITOR hmonitor, std::function<void(const cv::Mat&)> cb) override;
 
-public:
-	void Open();
-	void Close();
-	void SetCallback(std::function<void(const cv::Mat&)> cb);
+	virtual void stopCapture() override;
+
+	virtual void setClipToClientArea(bool enabled) override;
+	virtual bool isClipToClientArea() override;
+
+	virtual bool isCapturing() override;
+	virtual bool isCaptureWindow() override;
+	virtual bool isCaptureMonitor() override;
+
+	virtual void askForRefresh() override;
+	virtual bool isRefreshed() override;
+
+	virtual void copyMatTo(cv::Mat& target, bool convertToBGR = false) override;
+
+	virtual size_t getId() const override;
 
 protected:
 	void OnFrameArrived(
@@ -94,7 +74,7 @@ protected:
 	void CreateTexture();
 
 protected:
-	std::atomic_bool m_closed;
+	size_t m_id;
 
 	winrt::Windows::Graphics::Capture::GraphicsCaptureItem m_item;
 	winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool m_framePool;
@@ -116,9 +96,11 @@ protected:
 
 	D3D11_BOX m_client_box;
 	HWND m_target_window;
+	HMONITOR m_target_monitor;
 
 	cv::Mat m_cap;
 	std::mutex m_mutex_cap;
+	std::mutex m_mutex_proc;
 };
 
-} // namespace ohms::wgc
+} // namespace wgc

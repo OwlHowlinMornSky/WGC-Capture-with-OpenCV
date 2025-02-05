@@ -26,17 +26,17 @@
     <ClInclude Include="pch.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Capture.h">
+    <ClInclude Include="Factory.h">
       <Filter>Things</Filter>
     </ClInclude>
-    <ClInclude Include="CaptureCore.h">
+    <ClInclude Include="Capturer.h">
       <Filter>Things</Filter>
-    </ClInclude>
-    <ClInclude Include="include\ohms\WGC.h">
-      <Filter>Export</Filter>
     </ClInclude>
     <ClInclude Include="resource.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\WGC\WGC.h">
+      <Filter>Export</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -49,10 +49,10 @@
     <ClCompile Include="WGC.cpp">
       <Filter>Things</Filter>
     </ClCompile>
-    <ClCompile Include="Capture.cpp">
+    <ClCompile Include="Factory.cpp">
       <Filter>Things</Filter>
     </ClCompile>
-    <ClCompile Include="CaptureCore.cpp">
+    <ClCompile Include="Capturer.cpp">
       <Filter>Things</Filter>
     </ClCompile>
   </ItemGroup>

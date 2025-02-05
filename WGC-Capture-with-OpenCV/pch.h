@@ -1,7 +1,7 @@
 ﻿/*
 *    WGC-Capture-with-OpenCV
 *
-*     Copyright 2023-2024  Tyler Parret True
+*     Copyright 2023-2025  Tyler Parret True
 *
 *    Licensed under the Apache License, Version 2.0 (the "License");
 *    you may not use this file except in compliance with the License.
@@ -30,5 +30,11 @@
 // 添加要在此处预编译的标头
 #include "framework.h"
 #include <opencv2/opencv.hpp>
+
+#include <inspectable.h>
+#include <winrt/Windows.Foundation.h>
+#include <winrt/Windows.Graphics.Capture.h>
+#include <winrt/Windows.Graphics.DirectX.Direct3d11.h>
+#include <d3d11_4.h>
 
 #endif //PCH_H
