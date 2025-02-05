@@ -52,6 +52,7 @@ public:
 	virtual bool isClipToClientArea() override;
 
 	virtual bool isCapturing() override;
+	virtual bool isCaptureWindow() override;
 	virtual bool isCaptureMonitor() override;
 
 	virtual void askForRefresh() override;

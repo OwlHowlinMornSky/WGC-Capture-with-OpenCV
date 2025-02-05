@@ -35,7 +35,6 @@ public:
 
 public:
 	virtual std::weak_ptr<ICapturer> createCapturer() override;
-	virtual std::weak_ptr<ICapturer> createCapturerNoThrow() override;
 	virtual void destroyCapturer(std::weak_ptr<ICapturer> instance) override;
 
 protected:

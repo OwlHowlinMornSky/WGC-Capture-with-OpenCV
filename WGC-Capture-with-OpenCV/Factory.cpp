@@ -84,12 +84,6 @@ std::weak_ptr<ICapturer> Factory::createCapturer() {
 	return capture;
 }
 
-std::weak_ptr<ICapturer> Factory::createCapturerNoThrow() {
-
-
-	return std::weak_ptr<ICapturer>();
-}
-
 void Factory::destroyCapturer(std::weak_ptr<ICapturer> instance) {
 	auto capturer = instance.lock();
 	if (capturer == nullptr)

@@ -64,7 +64,6 @@ public:
 
 public:
 	virtual std::weak_ptr<ICapturer> createCapturer() = 0;
-	virtual std::weak_ptr<ICapturer> createCapturerNoThrow() = 0;
 	virtual void destroyCapturer(std::weak_ptr<ICapturer> instance) = 0;
 };
 
@@ -129,6 +128,7 @@ public:
 	 * @return 'true' if capturing.
 	 */
 	virtual bool isCapturing() = 0;
+	virtual bool isCaptureWindow() = 0;
 	/**
 	 * @brief Query if it has been set to capturing a monitor.
 	 * @return 'true' if a monitor now is captured.

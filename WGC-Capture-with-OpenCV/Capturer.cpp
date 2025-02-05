@@ -309,11 +309,15 @@ bool Capturer::isClipToClientArea() {
 }
 
 bool Capturer::isCapturing() {
-	return false;
+	return m_target_window != NULL || m_target_monitor != NULL;
+}
+
+bool Capturer::isCaptureWindow() {
+	return m_target_window != NULL;
 }
 
 bool Capturer::isCaptureMonitor() {
-	return false;
+	return m_target_monitor != NULL;
 }
 
 void Capturer::askForRefresh() {
