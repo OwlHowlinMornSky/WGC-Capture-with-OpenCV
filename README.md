@@ -6,7 +6,7 @@ WGC-Capture-with-OpenCV 是 [自由的](https://www.gnu.org/philosophy/free-sw.h
 
 ## Features
 
-* Capture a window or a monitor using WGC;
+* Capture windows or monitors using WGC;
 * Write captured frames into a cv::Mat for farther process.
 * Packaged into a DLL so you don't need to care about anything of WGC or C++/WinRT.
 
