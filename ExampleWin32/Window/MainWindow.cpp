@@ -45,12 +45,15 @@ LRESULT CALLBACK WndProc(
 namespace ohms {
 
 MainWindow::MainWindow() {
-	g_app = ohms::wgc::ICapture::getInstance();
+	r_factory = wgc::IFactory::createInstance(false);
+	r_capture = r_factory->createCapturer().lock();
 }
 
 MainWindow::~MainWindow() {
 	stopCapture();
-	g_app = nullptr;
+	r_factory->destroyCapturer(r_capture);
+	r_capture.reset();
+	r_factory.reset();
 }
 
 bool ohms::MainWindow::create(int nShowCmd) noexcept {
@@ -73,15 +76,15 @@ LRESULT MainWindow::procedure(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	case WM_CREATE:
 	{
 		hFont = CreateFontW(0, 0, 0, 0, FW_DONTCARE,
-							FALSE, FALSE, FALSE,
-							GB2312_CHARSET,
-							OUT_DEFAULT_PRECIS,
-							CLIP_DEFAULT_PRECIS,
-							CLEARTYPE_QUALITY,
-							DEFAULT_PITCH | FF_DONTCARE,
-							L"Segoe UI");
+			FALSE, FALSE, FALSE,
+			GB2312_CHARSET,
+			OUT_DEFAULT_PRECIS,
+			CLIP_DEFAULT_PRECIS,
+			CLEARTYPE_QUALITY,
+			DEFAULT_PITCH | FF_DONTCARE,
+			L"Segoe UI");
 
-		// Create combo box
+// Create combo box
 		hComboBoxHwnd = CreateWindowW(
 			WC_COMBOBOXW, L"",
 			CBS_DROPDOWNLIST | CBS_HASSTRINGS | WS_VSCROLL | WS_CHILD | WS_OVERLAPPED | WS_VISIBLE,
@@ -117,7 +120,7 @@ LRESULT MainWindow::procedure(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			10, 190, 100, 40,
 			hwnd, NULL, GetModuleHandleW(NULL), NULL);
 		SendMessageW(hButtonSwitchClient, WM_SETFONT, (WPARAM)hFont, TRUE);
-		Button_Enable(hButtonSwitchClient, FALSE);
+		//Button_Enable(hButtonSwitchClient, FALSE);
 
 		hButtonBigger = CreateWindowW(
 			WC_BUTTONW, L"Scale +",
@@ -209,8 +212,8 @@ LRESULT MainWindow::procedure(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		Rectangle(hdc, rect.left, rect.top, rect.right, rect.bottom);
 		if (nowPlay != -1) {
 			swprintf_s(str, 1024, L"Class:\n%s\n\nTitle:\n%s",
-					   m_windows[nowPlay].getClassName().c_str(),
-					   m_windows[nowPlay].getTitle().c_str());
+				m_windows[nowPlay].getClassName().c_str(),
+				m_windows[nowPlay].getTitle().c_str());
 		}
 		else {
 			swprintf_s(str, 1024, L"Class:\n\n\nTitle:\n");
@@ -243,8 +246,9 @@ LRESULT MainWindow::procedure(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 			if (IsWindow(dst)) {
 				if (!IsIconic(dst)) {
-					if (g_app->startCaptureWindow(dst)) {
-						g_app->askForRefresh();
+					if (r_capture->startCaptureWindow(dst)) {
+						r_capture->setClipToClientArea(isClient);
+						r_capture->askForRefresh();
 						//ohms::global::g_app->setDecimationMode(isSample);
 						//ohms::global::g_app->setShowScale(scale);
 
@@ -319,7 +323,7 @@ LRESULT MainWindow::procedure(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			}
 			else if ((HWND)lParam == hButtonSwitchClient) {
 				isClient = !isClient;
-				g_app->setClipToClientArea(isClient);
+				r_capture->setClipToClientArea(isClient);
 				InvalidateRect(hwnd, NULL, true);
 			}
 			break;
@@ -330,14 +334,12 @@ LRESULT MainWindow::procedure(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		break;
 
 	case WM_TIMER:
-		if (g_app->isRefreshed()) { // refresh过再处理画面才有意义
-			g_app->askForRefresh();
+		if (r_capture->isRefreshed()) { // refresh过再处理画面才有意义
+			r_capture->askForRefresh();
 
 			cv::Mat m_mat;
-			if (g_app->copyMatTo(m_mat, false)) { // 不要求转换为BGR
-				cv::imshow("test", m_mat);
-			}
-
+			r_capture->copyMatTo(m_mat, false); // 不要求转换为BGR
+			cv::imshow("test", m_mat);
 		}
 		break;
 
@@ -377,7 +379,7 @@ void MainWindow::refreshCombox() {
 
 void MainWindow::stopCapture(bool special) {
 	nowPlay = -1;
-	g_app->stopCapture();
+	r_capture->stopCapture();
 
 	if (!special)
 		SendMessageW(hComboBoxHwnd, CB_SETCURSEL, -1, 0);

@@ -24,7 +24,7 @@
 #include "WndEnumeration.h"
 
 #include <vector>
-#include <ohms/WGC.h>
+#include <WGC/WGC.h>
 
 namespace ohms {
 
@@ -50,8 +50,8 @@ protected:
 	void stopCapture(bool special = false);
 
 protected:
-	ohms::wgc::ICapture* g_app;
-
+	std::shared_ptr<wgc::IFactory> r_factory;
+	std::shared_ptr<wgc::ICapturer> r_capture;
 
 	HFONT hFont;
 	HWND hComboBoxHwnd;

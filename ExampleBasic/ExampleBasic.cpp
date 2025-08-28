@@ -21,6 +21,7 @@
 
 // You can use Spy++ to get the info about target window.
 constexpr wchar_t TargetWindowName[] = L"ExampleWindowName";
+constexpr wchar_t TargetWindowName2[] = L"ExampleWindowName";
 constexpr wchar_t TargetWindowClass[] = L"ExampleClassName";
 constexpr bool    TestCaptureMonitor = true;
 constexpr bool    TestFreeThreaded = true;

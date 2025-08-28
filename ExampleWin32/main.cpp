@@ -18,7 +18,7 @@
 * @Authors
 *    Tyler Parret True <mysteryworldgod@outlook.com><https://github.com/OwlHowlinMornSky>
 */
-#include <ohms/WGC.h>
+#include <WGC/WGC.h>
 
 #include "framework.h"
 #include "Window/MainWindow.h"
@@ -29,10 +29,10 @@ int CALLBACK wWinMain(
 	_In_ LPWSTR lpCmdLine,
 	_In_ int nShowCmd
 ) {
-	// Init
-	ohms::wgc::ICapture::setup(false);
 	// Run
 	{
+		SetProcessDPIAware();
+
 		ohms::MainWindow mainWnd;
 		mainWnd.create(nShowCmd);
 		MSG msg;
@@ -42,7 +42,5 @@ int CALLBACK wWinMain(
 		}
 		mainWnd.destroy();
 	}
-	// Clear
-	ohms::wgc::ICapture::drop();
 	return 0;
 }
