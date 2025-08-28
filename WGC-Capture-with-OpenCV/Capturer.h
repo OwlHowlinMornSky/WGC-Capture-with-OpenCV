@@ -80,9 +80,9 @@ protected:
 	winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool m_framePool;
 	winrt::Windows::Graphics::Capture::GraphicsCaptureSession m_session;
 
-	winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice m_device;
+	winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice r_device;
+	winrt::com_ptr<ID3D11Device> r_d3dDevice; // D3D11 Device relies on D3D Device.
 	winrt::com_ptr<ID3D11DeviceContext> m_d3dContext;
-	winrt::com_ptr<ID3D11Device> m_d3dDevice;
 	winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool::FrameArrived_revoker m_frameArrived;
 
 	ID3D11Texture2D* m_texture;

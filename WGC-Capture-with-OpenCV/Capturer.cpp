@@ -117,9 +117,9 @@ Capturer::Capturer(IDirect3DDevice const& device, size_t id) :
 	m_lastSize(),
 	m_lastTexSize(),
 
-	m_device(device),
+	r_device(device),
 	m_d3dContext(nullptr),
-	m_d3dDevice(nullptr),
+	r_d3dDevice(nullptr),
 
 	m_img_clientarea(false),
 	m_img_needRefresh(false),
@@ -142,8 +142,8 @@ bool Capturer::startCaptureWindow(HWND hwnd, bool freeThreaded) {
 	m_item = item;
 
 	// Set up 
-	m_d3dDevice = ::GetDXGIInterfaceFromObject<ID3D11Device>(m_device);
-	m_d3dDevice->GetImmediateContext(m_d3dContext.put());
+	r_d3dDevice = ::GetDXGIInterfaceFromObject<ID3D11Device>(r_device);
+	r_d3dDevice->GetImmediateContext(m_d3dContext.put());
 
 	const SizeInt32 size = m_item.Size();
 	// Create framepool, define pixel format (DXGI_FORMAT_B8G8R8A8_UNORM), and frame size. 
@@ -151,9 +151,9 @@ bool Capturer::startCaptureWindow(HWND hwnd, bool freeThreaded) {
 	m_lastTexSize = size;
 
 	if (freeThreaded)
-		m_framePool = Direct3D11CaptureFramePool::CreateFreeThreaded(m_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
+		m_framePool = Direct3D11CaptureFramePool::CreateFreeThreaded(r_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
 	else
-		m_framePool = Direct3D11CaptureFramePool::Create(m_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
+		m_framePool = Direct3D11CaptureFramePool::Create(r_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
 
 	m_session = m_framePool.CreateCaptureSession(m_item);
 	m_frameArrived = m_framePool.FrameArrived(auto_revoke, { this, &Capturer::OnFrameArrived });
@@ -178,8 +178,8 @@ bool Capturer::startCaptureMonitor(HMONITOR hmonitor, bool freeThreaded) {
 	m_item = item;
 
 	// Set up 
-	m_d3dDevice = ::GetDXGIInterfaceFromObject<ID3D11Device>(m_device);
-	m_d3dDevice->GetImmediateContext(m_d3dContext.put());
+	r_d3dDevice = ::GetDXGIInterfaceFromObject<ID3D11Device>(r_device);
+	r_d3dDevice->GetImmediateContext(m_d3dContext.put());
 
 	const SizeInt32 size = m_item.Size();
 	// Create framepool, define pixel format (DXGI_FORMAT_B8G8R8A8_UNORM), and frame size. 
@@ -187,9 +187,9 @@ bool Capturer::startCaptureMonitor(HMONITOR hmonitor, bool freeThreaded) {
 	m_lastTexSize = size;
 
 	if (freeThreaded)
-		m_framePool = Direct3D11CaptureFramePool::CreateFreeThreaded(m_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
+		m_framePool = Direct3D11CaptureFramePool::CreateFreeThreaded(r_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
 	else
-		m_framePool = Direct3D11CaptureFramePool::Create(m_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
+		m_framePool = Direct3D11CaptureFramePool::Create(r_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
 
 	m_session = m_framePool.CreateCaptureSession(m_item);
 	m_frameArrived = m_framePool.FrameArrived(auto_revoke, { this, &Capturer::OnFrameArrived });
@@ -214,15 +214,15 @@ bool Capturer::startCaptureWindowWithCallback(HWND hwnd, std::function<void(cons
 	m_item = item;
 
 	// Set up 
-	m_d3dDevice = ::GetDXGIInterfaceFromObject<ID3D11Device>(m_device);
-	m_d3dDevice->GetImmediateContext(m_d3dContext.put());
+	r_d3dDevice = ::GetDXGIInterfaceFromObject<ID3D11Device>(r_device);
+	r_d3dDevice->GetImmediateContext(m_d3dContext.put());
 
 	const SizeInt32 size = m_item.Size();
 	// Create framepool, define pixel format (DXGI_FORMAT_B8G8R8A8_UNORM), and frame size. 
 	m_lastSize = size;
 	m_lastTexSize = size;
 
-	m_framePool = Direct3D11CaptureFramePool::CreateFreeThreaded(m_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
+	m_framePool = Direct3D11CaptureFramePool::CreateFreeThreaded(r_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
 
 	m_session = m_framePool.CreateCaptureSession(m_item);
 	m_frameArrived = m_framePool.FrameArrived(auto_revoke, { this, &Capturer::OnFrameArrivedWithCallback });
@@ -248,15 +248,15 @@ bool Capturer::startCaptureMonitorWithCallback(HMONITOR hmonitor, std::function<
 	m_item = item;
 
 	// Set up 
-	m_d3dDevice = ::GetDXGIInterfaceFromObject<ID3D11Device>(m_device);
-	m_d3dDevice->GetImmediateContext(m_d3dContext.put());
+	r_d3dDevice = ::GetDXGIInterfaceFromObject<ID3D11Device>(r_device);
+	r_d3dDevice->GetImmediateContext(m_d3dContext.put());
 
 	const SizeInt32 size = m_item.Size();
 	// Create framepool, define pixel format (DXGI_FORMAT_B8G8R8A8_UNORM), and frame size. 
 	m_lastSize = size;
 	m_lastTexSize = size;
 
-	m_framePool = Direct3D11CaptureFramePool::CreateFreeThreaded(m_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
+	m_framePool = Direct3D11CaptureFramePool::CreateFreeThreaded(r_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
 
 	m_session = m_framePool.CreateCaptureSession(m_item);
 	m_frameArrived = m_framePool.FrameArrived(auto_revoke, { this, &Capturer::OnFrameArrivedWithCallback });
@@ -293,9 +293,8 @@ void Capturer::stopCapture() {
 	m_item = nullptr;
 
 	m_d3dContext->Release();
-	m_d3dDevice->Release();
 	m_d3dContext = nullptr;
-	m_d3dDevice = nullptr;
+	r_d3dDevice = nullptr;
 
 	m_img_clientarea = false;
 }
@@ -395,7 +394,7 @@ void Capturer::OnFrameArrived(
 	if (m_lastSize.Width != frameContentSize.Width ||
 		m_lastSize.Height != frameContentSize.Height) {
 		m_lastSize = frameContentSize;
-		m_framePool.Recreate(m_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
+		m_framePool.Recreate(r_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
 	}
 }
 
@@ -445,7 +444,7 @@ void Capturer::OnFrameArrivedWithCallback(
 	if (m_lastSize.Width != frameContentSize.Width ||
 		m_lastSize.Height != frameContentSize.Height) {
 		m_lastSize = frameContentSize;
-		m_framePool.Recreate(m_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
+		m_framePool.Recreate(r_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
 	}
 }
 
@@ -467,7 +466,7 @@ inline void Capturer::CreateTexture() {
 	desc.Width = m_lastTexSize.Width;
 	desc.Height = m_lastTexSize.Height;
 
-	m_d3dDevice.get()->CreateTexture2D(&desc, nullptr, &m_texture);
+	r_d3dDevice.get()->CreateTexture2D(&desc, nullptr, &m_texture);
 }
 
 } // namespace wgc
