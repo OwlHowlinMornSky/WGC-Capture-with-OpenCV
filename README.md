@@ -12,14 +12,28 @@ WGC-Capture-with-OpenCV 是 [自由的](https://www.gnu.org/philosophy/free-sw.h
 
 ## Requirements
 
-* OpenCV 4.10.0
+* Windows 10 1903 or later (Windows 11 recommended; verified with VS2026/v145).
+* Visual Studio 2026 with the v145 toolset to build the DLL.
+* OpenCV 4.10.0.
+* C++20 for the DLL; the public header itself is C++17-compatible.
+* The host and the DLL must use the same compiler/STL, the same Debug/Release
+  configuration, the same OpenCV build and the same `/MD` or `/MDd` runtime.
+
+## Building
+
+The project reads OpenCV from `$(OHMS_LIB_DIR)\opencv\4.10.0\build`.
+Define `OHMS_LIB_DIR` (for example `C:\Users\me\dev_libs`) before building.
+`WGC-Capture-with-OpenCV.sln` builds the library and both examples.
 
 ## Usage
 
-0. Setup OpenCV 4.10.0.
-1. Add `/include` into *Additional Include Directories*.
-2. Add `/lib` into *Additional Library Directories*.
-3. Add `wgc-capture.lib` (Release) or `wgc-capture-d.lib` (Debug) into *Additional Dependencies*.
-4. Include the header `WGC/WGC.h` at anywhere needed.
-5. Remember to copy necessary DLL files in `/bin`.
-6. Examples are available.
+0. Build or obtain `wgc-capture.dll` (Release) or `wgc-capture-d.dll` (Debug).
+1. Add `WGC-Capture-with-OpenCV/include` to *Additional Include Directories*.
+2. Add the directory containing `wgc-capture.lib` / `wgc-capture-d.lib`
+   (normally `x64\<Configuration>`) to *Additional Library Directories*.
+3. Add `wgc-capture.lib` (Release) or `wgc-capture-d.lib` (Debug) to
+   *Additional Dependencies*.
+4. Include `WGC/WGC.h` where needed.
+5. Copy `wgc-capture*.dll` and the matching OpenCV DLLs next to the executable.
+6. Examples are available; build them through the solution so that
+   `$(SolutionDir)` is defined.
