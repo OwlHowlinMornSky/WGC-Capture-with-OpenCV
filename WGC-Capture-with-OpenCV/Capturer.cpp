@@ -1,4 +1,4 @@
-﻿/*
+/*
 *    WGC-Capture-with-OpenCV
 *
 *     Copyright 2023-2025  Tyler Parret True
@@ -292,7 +292,6 @@ void Capturer::stopCapture() {
 	m_session = nullptr;
 	m_item = nullptr;
 
-	m_d3dContext->Release();
 	m_d3dContext = nullptr;
 	r_d3dDevice = nullptr;
 
