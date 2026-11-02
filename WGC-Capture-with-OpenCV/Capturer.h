@@ -73,6 +73,13 @@ protected:
 		winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool const& sender,
 		winrt::Windows::Foundation::IInspectable const& args
 	); // 注意这个方法不锁mat，不管needUpdate，也不设置updated。
+	bool StartCapture(
+		winrt::Windows::Graphics::Capture::GraphicsCaptureItem const& item,
+		bool freeThreaded,
+		HWND window,
+		HMONITOR monitor,
+		std::function<void(const cv::Mat&)> callback
+	);
 	bool CreateTexture(winrt::Windows::Graphics::SizeInt32 size);
 	bool UpdateMatFromTexture();
 	void ResetSessionLocked() noexcept;
