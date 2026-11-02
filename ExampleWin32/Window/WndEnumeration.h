@@ -43,6 +43,31 @@ protected:
 	std::wstring m_className;
 }; // sturct WindowInfo
 
+struct MonitorInfo final {
+public:
+	MonitorInfo() noexcept;
+	MonitorInfo(
+		HMONITOR hmonitor,
+		std::wstring const& deviceName,
+		RECT const& rect,
+		bool primary
+	);
+	~MonitorInfo() = default;
+
+	HMONITOR getHandle() const noexcept;
+	std::wstring const& getDeviceName() const noexcept;
+	int getWidth() const noexcept;
+	int getHeight() const noexcept;
+	bool isPrimary() const noexcept;
+
+protected:
+	HMONITOR m_hmonitor;
+	std::wstring m_deviceName;
+	RECT m_rect;
+	bool m_primary;
+}; // struct MonitorInfo
+
 void EnumerateWindows(std::vector<WindowInfo>& windows);
+void EnumerateMonitors(std::vector<MonitorInfo>& monitors);
 
 }

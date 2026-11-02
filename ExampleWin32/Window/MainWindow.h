@@ -1,4 +1,4 @@
-﻿/*
+/*
 *    WGC-Capture-with-OpenCV
 *
 *     Copyright 2023-2024  Tyler Parret True
@@ -23,6 +23,7 @@
 #include "Window.h"
 #include "WndEnumeration.h"
 
+#include <string>
 #include <vector>
 #include <WGC/WGC.h>
 
@@ -32,6 +33,12 @@ class MainWindow final :
 	public Window {
 public:
 	using Parent = Window;
+
+	enum class SourceKind {
+		None,
+		Window,
+		Monitor
+	};
 
 public:
 	MainWindow();
@@ -49,12 +56,21 @@ protected:
 	void refreshCombox();
 	void stopCapture(bool special = false);
 
+	void startWindowCapture(size_t index);
+	void startMonitorCapture(size_t index);
+	void showPreview();
+	void saveFrame(bool bgr);
+	void updateControls();
+	void reportCaptureError(const wchar_t* action);
+	std::wstring makeMonitorLabel(size_t index) const;
+
 protected:
 	std::shared_ptr<wgc::IFactory> r_factory;
 	std::shared_ptr<wgc::ICapturer> r_capture;
 
 	HFONT hFont;
 	HWND hComboBoxHwnd;
+	HWND hMonitorCombo;
 	HWND hButtonRf;
 	HWND hButtonStop;
 	HWND hButtonSample;
@@ -63,13 +79,19 @@ protected:
 	HWND hButtonSave;
 	HWND hButtonSaveC3;
 	HWND hButtonSwitchClient;
+	HWND hButtonScreen;
 	std::vector<ohms::WindowInfo> m_windows;
+	std::vector<ohms::MonitorInfo> m_monitors;
 
+	SourceKind nowSource = SourceKind::None;
 	bool isSample = false;
 	bool isClient = true;
 	int scale = 100;
 	LONG_PTR nowPlay = -1;
+	int nowMonitor = -1;
 	size_t saveCount = 0;
+	cv::Mat m_lastFrame;
+	std::wstring m_statusMessage;
 };
 
 } // namespace ohms

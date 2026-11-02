@@ -21,7 +21,16 @@
 #include "MainWindow.h"
 
 #include <opencv2/opencv.hpp>
+
+#include <commdlg.h>
+
+#include <algorithm>
 #include <cstdio>
+#include <cwchar>
+#include <filesystem>
+#include <fstream>
+#include <stdexcept>
+#include <vector>
 
 #include "WndEnumeration.h"
 #include "macro.h"
@@ -30,16 +39,7 @@
 
 namespace {
 
-
-LRESULT CALLBACK WndProc(
-	HWND   hwnd,
-	UINT   msg,
-	WPARAM wParam,
-	LPARAM lParam) {
-
-	return 0;
-}
-
+constexpr int kDecimationFactor = 10;
 
 } // namespace
 
@@ -89,6 +89,7 @@ LRESULT MainWindow::procedure(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	switch (msg) {
 	case WM_CREATE:
 	{
+		m_hwnd = hwnd;
 		hFont = CreateFontW(0, 0, 0, 0, FW_DONTCARE,
 			FALSE, FALSE, FALSE,
 			GB2312_CHARSET,
@@ -98,64 +99,75 @@ LRESULT MainWindow::procedure(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			DEFAULT_PITCH | FF_DONTCARE,
 			L"Segoe UI");
 
-// Create combo box
+		// Window source combo.
 		hComboBoxHwnd = CreateWindowW(
 			WC_COMBOBOXW, L"",
 			CBS_DROPDOWNLIST | CBS_HASSTRINGS | WS_VSCROLL | WS_CHILD | WS_OVERLAPPED | WS_VISIBLE,
-			150, 10, 600, 300,
+			150, 10, 440, 200,
 			hwnd, NULL, GetModuleHandleW(NULL), NULL);
 		SendMessageW(hComboBoxHwnd, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+		// Monitor source combo.
+		hMonitorCombo = CreateWindowW(
+			WC_COMBOBOXW, L"",
+			CBS_DROPDOWNLIST | CBS_HASSTRINGS | WS_VSCROLL | WS_CHILD | WS_OVERLAPPED | WS_VISIBLE,
+			150, 50, 440, 200,
+			hwnd, NULL, GetModuleHandleW(NULL), NULL);
+		SendMessageW(hMonitorCombo, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+		hButtonScreen = CreateWindowW(
+			WC_BUTTONW, L"Capture Screen",
+			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
+			600, 50, 140, 30,
+			hwnd, NULL, GetModuleHandleW(NULL), NULL);
+		SendMessageW(hButtonScreen, WM_SETFONT, (WPARAM)hFont, TRUE);
 
 		hButtonRf = CreateWindowW(
 			WC_BUTTONW, L"Refresh",
 			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-			10, 10, 100, 40,
+			10, 10, 100, 35,
 			hwnd, NULL, GetModuleHandleW(NULL), NULL);
 		SendMessageW(hButtonRf, WM_SETFONT, (WPARAM)hFont, TRUE);
 
 		hButtonStop = CreateWindowW(
 			WC_BUTTONW, L"Stop",
 			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-			10, 70, 100, 40,
+			10, 55, 100, 35,
 			hwnd, NULL, GetModuleHandleW(NULL), NULL);
 		SendMessageW(hButtonStop, WM_SETFONT, (WPARAM)hFont, TRUE);
 
 		hButtonSample = CreateWindowW(
 			WC_BUTTONW, L"Decimation",
 			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-			10, 130, 100, 40,
+			10, 100, 100, 35,
 			hwnd, NULL, GetModuleHandleW(NULL), NULL);
 		SendMessageW(hButtonSample, WM_SETFONT, (WPARAM)hFont, TRUE);
-		Button_Enable(hButtonSample, FALSE);
 
 		hButtonSwitchClient = CreateWindowW(
 			WC_BUTTONW, L"Switch Client",
 			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-			10, 190, 100, 40,
+			10, 145, 100, 35,
 			hwnd, NULL, GetModuleHandleW(NULL), NULL);
 		SendMessageW(hButtonSwitchClient, WM_SETFONT, (WPARAM)hFont, TRUE);
-		//Button_Enable(hButtonSwitchClient, FALSE);
 
 		hButtonBigger = CreateWindowW(
 			WC_BUTTONW, L"Scale +",
 			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-			10, 250, 100, 40,
+			10, 190, 100, 35,
 			hwnd, NULL, GetModuleHandleW(NULL), NULL);
 		SendMessageW(hButtonBigger, WM_SETFONT, (WPARAM)hFont, TRUE);
-		Button_Enable(hButtonBigger, FALSE);
 
 		hButtonSmaller = CreateWindowW(
 			WC_BUTTONW, L"Scale -",
 			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-			10, 310, 100, 40,
+			10, 235, 100, 35,
 			hwnd, NULL, GetModuleHandleW(NULL), NULL);
 		SendMessageW(hButtonSmaller, WM_SETFONT, (WPARAM)hFont, TRUE);
-		Button_Enable(hButtonSmaller, FALSE);
 
 		hButtonSaveC3 = CreateWindowW(
 			WC_BUTTONW, L"Save BGR",
 			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-			10, 370, 100, 40,
+			10, 280, 100, 35,
 			hwnd, NULL, GetModuleHandleW(NULL), NULL);
 		SendMessageW(hButtonSaveC3, WM_SETFONT, (WPARAM)hFont, TRUE);
 		Button_Enable(hButtonSaveC3, FALSE);
@@ -163,17 +175,19 @@ LRESULT MainWindow::procedure(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		hButtonSave = CreateWindowW(
 			WC_BUTTONW, L"Save BGRA",
 			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-			10, 430, 100, 40,
+			10, 325, 100, 35,
 			hwnd, NULL, GetModuleHandleW(NULL), NULL);
 		SendMessageW(hButtonSave, WM_SETFONT, (WPARAM)hFont, TRUE);
 		Button_Enable(hButtonSave, FALSE);
 
-		SendMessageW(hwnd, WM_OHMS_REFRESH_COMBOX, 0, 0);
+		refreshCombox();
+		updateControls();
 		break;
 	}
 
 	case WM_DESTROY:
 	{
+		DestroyWindow(hButtonScreen);
 		DestroyWindow(hButtonSwitchClient);
 		DestroyWindow(hButtonSaveC3);
 		DestroyWindow(hButtonSave);
@@ -182,6 +196,7 @@ LRESULT MainWindow::procedure(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		DestroyWindow(hButtonSample);
 		DestroyWindow(hButtonStop);
 		DestroyWindow(hButtonRf);
+		DestroyWindow(hMonitorCombo);
 		DestroyWindow(hComboBoxHwnd);
 		DeleteObject(hFont);
 		PostQuitMessage(0);
@@ -196,48 +211,84 @@ LRESULT MainWindow::procedure(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 		HGDIOBJ hOldFont = SelectObject(hdc, hFont);
 
-		WCHAR str[1024];
+		WCHAR str[2048];
 		RECT rect;
 
-		swprintf_s(str, 1024, (nowPlay != -1) ? L"Running" : L"Stopped");
-		rect = { 120, 80, 220, 120 };
-		DrawTextW(hdc, str, -1, &rect, DT_LEFT | DT_TOP | DT_WORDBREAK | DT_NOCLIP | DT_CALCRECT);
-		//Rectangle(hdc, rect.left, rect.top, rect.right, rect.bottom);
+		const wchar_t* state =
+			nowSource == SourceKind::None ? L"Stopped" : L"Running";
+		const wchar_t* source =
+			nowSource == SourceKind::Window ? L"Window" :
+			nowSource == SourceKind::Monitor ? L"Screen" : L"None";
+
+		swprintf_s(
+			str,
+			L"State: %s\nSource: %s\nDecimation: %s\nScale: %d %%\nClient area: %s",
+			state,
+			source,
+			isSample ? L"10x" : L"Off",
+			scale,
+			nowSource == SourceKind::Monitor
+				? L"N/A (screen)"
+				: (isClient ? L"On" : L"Off")
+		);
+		rect = { 10, 380, 220, 510 };
 		DrawTextW(hdc, str, -1, &rect, DT_LEFT | DT_TOP | DT_WORDBREAK);
 
-		swprintf_s(str, 1024, isSample ? L"Now:\nDecimation" : L"Now:\nNormal");
-		rect = { 120, 130, 220, 180 };
-		DrawTextW(hdc, str, -1, &rect, DT_LEFT | DT_TOP | DT_WORDBREAK | DT_NOCLIP | DT_CALCRECT);
-		//Rectangle(hdc, rect.left, rect.top, rect.right, rect.bottom);
-		DrawTextW(hdc, str, -1, &rect, DT_LEFT | DT_TOP | DT_WORDBREAK);
+		if (!m_statusMessage.empty()) {
+			rect = { 10, 505, 780, 555 };
+			DrawTextW(
+				hdc, m_statusMessage.c_str(), -1, &rect,
+				DT_LEFT | DT_TOP | DT_WORDBREAK | DT_NOPREFIX | DT_WORD_ELLIPSIS
+			);
+		}
 
-		swprintf_s(str, 1024, isClient ? L"Now:\nClient" : L"Now:\nWindow");
-		rect = { 120, 190, 220, 280 };
-		DrawTextW(hdc, str, -1, &rect, DT_LEFT | DT_TOP | DT_WORDBREAK | DT_NOCLIP | DT_CALCRECT);
-		//Rectangle(hdc, rect.left, rect.top, rect.right, rect.bottom);
-		DrawTextW(hdc, str, -1, &rect, DT_LEFT | DT_TOP | DT_WORDBREAK);
-
-		swprintf_s(str, 1024, L"Scale: %d %%", scale * (isSample ? 10 : 1));
-		rect = { 120, 290, 220, 500 };
-		DrawTextW(hdc, str, -1, &rect, DT_LEFT | DT_TOP | DT_WORDBREAK | DT_NOCLIP | DT_CALCRECT);
-		//Rectangle(hdc, rect.left, rect.top, rect.right, rect.bottom);
-		DrawTextW(hdc, str, -1, &rect, DT_LEFT | DT_TOP | DT_WORDBREAK);
-
-		rect = { 230, 80, 750, 500 };
+		rect = { 230, 90, 750, 500 };
 		Rectangle(hdc, rect.left, rect.top, rect.right, rect.bottom);
-		if (nowPlay != -1) {
-			swprintf_s(str, 1024, L"Class:\n%s\n\nTitle:\n%s",
-				m_windows[nowPlay].getClassName().c_str(),
-				m_windows[nowPlay].getTitle().c_str());
+
+		rect.left += 8;
+		rect.top += 8;
+		rect.right -= 8;
+		rect.bottom -= 8;
+
+		if (nowSource == SourceKind::Window &&
+			nowPlay >= 0 &&
+			static_cast<size_t>(nowPlay) < m_windows.size()) {
+			const auto& window = m_windows[static_cast<size_t>(nowPlay)];
+			swprintf_s(
+				str,
+				L"Window\n\nClass:\n%s\n\nTitle:\n%s",
+				window.getClassName().c_str(),
+				window.getTitle().c_str()
+			);
+		}
+		else if (nowSource == SourceKind::Monitor &&
+			nowMonitor >= 0 &&
+			static_cast<size_t>(nowMonitor) < m_monitors.size()) {
+			const auto& monitor = m_monitors[static_cast<size_t>(nowMonitor)];
+			swprintf_s(
+				str,
+				L"Screen\n\nDevice:\n%s\n\nResolution:\n%d x %d\n\nPrimary:\n%s",
+				monitor.getDeviceName().c_str(),
+				monitor.getWidth(),
+				monitor.getHeight(),
+				monitor.isPrimary() ? L"Yes" : L"No"
+			);
 		}
 		else {
-			swprintf_s(str, 1024, L"Class:\n\n\nTitle:\n");
+			swprintf_s(
+				str,
+				L"No source selected.\n\n"
+				L"Choose a window from the top list, or choose a monitor "
+				L"and click \"Capture Screen\"."
+			);
 		}
-		DrawTextW(hdc, str, -1, &rect, DT_LEFT | DT_TOP | DT_WORDBREAK | DT_NOPREFIX | DT_NOCLIP | DT_WORD_ELLIPSIS);
+		DrawTextW(
+			hdc, str, -1, &rect,
+			DT_LEFT | DT_TOP | DT_WORDBREAK | DT_NOPREFIX | DT_NOCLIP | DT_WORD_ELLIPSIS
+		);
 
 		SelectObject(hdc, hOldFont);
 		EndPaint(hwnd, &ps);
-
 		break;
 	}
 
@@ -250,105 +301,72 @@ LRESULT MainWindow::procedure(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		switch (HIWORD(wParam)) {
 		case CBN_SELCHANGE:
 		{
-			const LRESULT index = SendMessageW((HWND)lParam, CB_GETCURSEL, 0, 0);
-
-			if (index < 0 || static_cast<size_t>(index) >= m_windows.size())
-				break;
-			if (nowPlay == index)
-				break;
-
-			stopCapture(true);
-
-			HWND dst = m_windows.at(static_cast<size_t>(index)).getHWnd();
-
-			if (IsWindow(dst)) {
-				if (!IsIconic(dst)) {
-					if (r_capture->startCaptureWindow(dst)) {
-						r_capture->setClipToClientArea(isClient);
-						r_capture->askForRefresh();
-						//ohms::global::g_app->setDecimationMode(isSample);
-						//ohms::global::g_app->setShowScale(scale);
-
-						nowPlay = index;
-					}
-					else {
-						stopCapture();
-						WCHAR message[512];
-						swprintf_s(
-							message,
-							L"This window cannot be captured.\n\nHRESULT: 0x%08X\n%s",
-							static_cast<unsigned int>(wgc::getLastError()),
-							wgc::getLastErrorMessage()
-						);
-						MessageBoxW(hwnd, message, L"ERROR", MB_ICONERROR);
-					}
-				}
-				else {
-					stopCapture();
-					MessageBoxW(hwnd, L"Please restore minimized window before capture.", L"WARNING", MB_ICONWARNING);
+			if ((HWND)lParam == hComboBoxHwnd) {
+				const LRESULT index = SendMessageW(hComboBoxHwnd, CB_GETCURSEL, 0, 0);
+				if (index < 0 || static_cast<size_t>(index) >= m_windows.size())
+					break;
+				if (nowSource == SourceKind::Window && nowPlay == index)
+					break;
+				startWindowCapture(static_cast<size_t>(index));
+			}
+			else if ((HWND)lParam == hMonitorCombo) {
+				const LRESULT index = SendMessageW(hMonitorCombo, CB_GETCURSEL, 0, 0);
+				if (index >= 0 && static_cast<size_t>(index) < m_monitors.size()) {
+					m_statusMessage = L"Selected monitor. Click \"Capture Screen\" to start.";
+					InvalidateRect(hwnd, NULL, true);
 				}
 			}
-			else {
-				stopCapture();
-				SendMessageW(hwnd, WM_OHMS_REFRESH_COMBOX, 0, 0);
-			}
-
-			InvalidateRect(hwnd, NULL, true);
-
 			break;
 		}
 		case BN_CLICKED:
 		{
-
 			if ((HWND)lParam == hButtonRf) {
-				SendMessageW(hwnd, WM_OHMS_STOP_CAPTURE, 0, 0);
-				SendMessageW(hwnd, WM_OHMS_REFRESH_COMBOX, 0, 0);
+				stopCapture();
+				refreshCombox();
 			}
 			else if ((HWND)lParam == hButtonStop) {
-				SendMessageW(hwnd, WM_OHMS_STOP_CAPTURE, 0, 0);
+				stopCapture();
 			}
 			else if ((HWND)lParam == hButtonSample) {
 				isSample = !isSample;
-				//ohms::global::g_app->setDecimationMode(isSample);
 				SetWindowTextW(hButtonSample, isSample ? L"Normal" : L"Decimation");
+				if (!m_lastFrame.empty())
+					showPreview();
 				InvalidateRect(hwnd, NULL, true);
 			}
 			else if ((HWND)lParam == hButtonBigger) {
 				if (scale < 200)
 					scale += 10;
-				//ohms::global::g_app->setShowScale(scale);
+				if (!m_lastFrame.empty())
+					showPreview();
 				InvalidateRect(hwnd, NULL, true);
 			}
 			else if ((HWND)lParam == hButtonSmaller) {
 				if (scale > 10)
 					scale -= 10;
-				//ohms::global::g_app->setShowScale(scale);
+				if (!m_lastFrame.empty())
+					showPreview();
 				InvalidateRect(hwnd, NULL, true);
 			}
-			else if ((HWND)lParam == hButtonSave) {
-				if (nowPlay == -1) {
-					MessageBoxW(hwnd, L"Please choose a window before save image.", L"ERROR", MB_ICONERROR);
-				}
-				else {
-					//if (!ohms::global::g_app->saveNow(false, saveCount++)) {
-					//	MessageBoxW(hwnd, L"Failed saving.", L"ERROR", MB_ICONERROR);
-					//}
-				}
-			}
 			else if ((HWND)lParam == hButtonSaveC3) {
-				if (nowPlay == -1) {
-					MessageBoxW(hwnd, L"Please choose a window before save image.", L"ERROR", MB_ICONERROR);
-				}
-				else {
-					//if (!ohms::global::g_app->saveNow(true, saveCount++)) {
-					//	MessageBoxW(hwnd, L"Failed saving.", L"ERROR", MB_ICONERROR);
-					//}
-				}
+				saveFrame(true);
+			}
+			else if ((HWND)lParam == hButtonSave) {
+				saveFrame(false);
 			}
 			else if ((HWND)lParam == hButtonSwitchClient) {
 				isClient = !isClient;
-				r_capture->setClipToClientArea(isClient);
+				if (r_capture && nowSource == SourceKind::Window)
+					r_capture->setClipToClientArea(isClient);
 				InvalidateRect(hwnd, NULL, true);
+			}
+			else if ((HWND)lParam == hButtonScreen) {
+				const LRESULT index = SendMessageW(hMonitorCombo, CB_GETCURSEL, 0, 0);
+				if (index < 0 || static_cast<size_t>(index) >= m_monitors.size()) {
+					MessageBoxW(hwnd, L"Please select a monitor first.", L"WARNING", MB_ICONWARNING);
+					break;
+				}
+				startMonitorCapture(static_cast<size_t>(index));
 			}
 			break;
 		}
@@ -358,12 +376,34 @@ LRESULT MainWindow::procedure(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		break;
 
 	case WM_TIMER:
+		if (r_capture && nowSource != SourceKind::None && !r_capture->isCapturing()) {
+			// The target window closed, or the library stopped the session.
+			nowSource = SourceKind::None;
+			nowPlay = -1;
+			nowMonitor = -1;
+			cv::destroyAllWindows();
+			m_statusMessage = L"Capture stopped (target closed).";
+			updateControls();
+			InvalidateRect(hwnd, NULL, true);
+			break;
+		}
+
 		if (r_capture && r_capture->isRefreshed()) {
-			cv::Mat m_mat;
-			r_capture->copyMatTo(m_mat, false); // 不要求转换为BGR
-			r_capture->askForRefresh();
-			if (!m_mat.empty())
-				cv::imshow("test", m_mat);
+			try {
+				cv::Mat frame;
+				r_capture->copyMatTo(frame, false);
+				r_capture->askForRefresh();
+				if (!frame.empty()) {
+					m_lastFrame = frame;
+					updateControls();
+					showPreview();
+					InvalidateRect(hwnd, NULL, true);
+				}
+			}
+			catch (...) {
+				m_statusMessage = L"Failed to copy the captured frame.";
+				InvalidateRect(hwnd, NULL, true);
+			}
 		}
 		break;
 
@@ -377,39 +417,304 @@ LRESULT MainWindow::procedure(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 	default:
 		return DefWindowProc(hwnd, msg, wParam, lParam);
-		break;
 	}
 	return 0;
 }
 
 void MainWindow::refreshCombox() {
-	m_windows.clear();
-	ohms::EnumerateWindows(m_windows);
+	try {
+		m_windows.clear();
+		m_monitors.clear();
 
-	SendMessageW(hComboBoxHwnd, CB_RESETCONTENT, 0, 0);
+		ohms::EnumerateWindows(m_windows);
+		ohms::EnumerateMonitors(m_monitors);
 
-	for (std::vector<ohms::WindowInfo>::iterator i = m_windows.begin(), n = m_windows.end(); i != n; ++i) {
-		if (i->getHWnd() == m_hwnd) {
-			m_windows.erase(i);
-			break;
+		for (auto i = m_windows.begin(); i != m_windows.end(); ++i) {
+			if (i->getHWnd() == m_hwnd) {
+				m_windows.erase(i);
+				break;
+			}
 		}
 	}
+	catch (...) {
+		m_statusMessage = L"Failed to enumerate capture sources.";
+	}
 
-	// Populate combo box
-	for (const ohms::WindowInfo& window : m_windows) {
-		SendMessageW(hComboBoxHwnd, CB_ADDSTRING, 0, (LPARAM)window.getTitle().c_str());
+	SendMessageW(hComboBoxHwnd, CB_RESETCONTENT, 0, 0);
+	for (const auto& window : m_windows) {
+		SendMessageW(
+			hComboBoxHwnd, CB_ADDSTRING, 0,
+			(LPARAM)window.getTitle().c_str()
+		);
+	}
+
+	SendMessageW(hMonitorCombo, CB_RESETCONTENT, 0, 0);
+	for (size_t i = 0; i < m_monitors.size(); ++i) {
+		SendMessageW(
+			hMonitorCombo, CB_ADDSTRING, 0,
+			(LPARAM)makeMonitorLabel(i).c_str()
+		);
+	}
+
+	if (!m_monitors.empty()) {
+		size_t selected = 0;
+		for (size_t i = 0; i < m_monitors.size(); ++i) {
+			if (m_monitors[i].isPrimary()) {
+				selected = i;
+				break;
+			}
+		}
+		SendMessageW(hMonitorCombo, CB_SETCURSEL, selected, 0);
+	}
+
+	updateControls();
+	InvalidateRect(m_hwnd, NULL, true);
+}
+
+void MainWindow::startWindowCapture(size_t index) {
+	if (index >= m_windows.size())
+		return;
+
+	stopCapture(true);
+
+	const HWND target = m_windows[index].getHWnd();
+	if (!IsWindow(target)) {
+		stopCapture();
+		SendMessageW(m_hwnd, WM_OHMS_REFRESH_COMBOX, 0, 0);
+		return;
+	}
+	if (IsIconic(target)) {
+		stopCapture();
+		MessageBoxW(
+			m_hwnd,
+			L"Please restore the minimized window before capture.",
+			L"WARNING", MB_ICONWARNING
+		);
+		return;
+	}
+
+	try {
+		r_capture->setClipToClientArea(isClient);
+		if (!r_capture->startCaptureWindow(target)) {
+			reportCaptureError(L"startCaptureWindow");
+			stopCapture();
+			return;
+		}
+
+		r_capture->askForRefresh();
+		nowSource = SourceKind::Window;
+		nowPlay = static_cast<LONG_PTR>(index);
+		nowMonitor = -1;
+		m_lastFrame.release();
+		m_statusMessage = L"Window capture started.";
+		updateControls();
+		InvalidateRect(m_hwnd, NULL, true);
+	}
+	catch (...) {
+		reportCaptureError(L"startCaptureWindow");
+		stopCapture();
 	}
 }
 
+void MainWindow::startMonitorCapture(size_t index) {
+	if (index >= m_monitors.size())
+		return;
+
+	stopCapture(true);
+
+	try {
+		if (!r_capture->startCaptureMonitor(m_monitors[index].getHandle(), true)) {
+			reportCaptureError(L"startCaptureMonitor");
+			stopCapture();
+			return;
+		}
+
+		r_capture->askForRefresh();
+		nowSource = SourceKind::Monitor;
+		nowPlay = -1;
+		nowMonitor = static_cast<int>(index);
+		m_lastFrame.release();
+		m_statusMessage = L"Screen capture started.";
+		updateControls();
+		InvalidateRect(m_hwnd, NULL, true);
+	}
+	catch (...) {
+		reportCaptureError(L"startCaptureMonitor");
+		stopCapture();
+	}
+}
+
+void MainWindow::showPreview() {
+	if (m_lastFrame.empty())
+		return;
+
+	try {
+		cv::Mat preview;
+		if (isSample) {
+			const int width = std::max(1, m_lastFrame.cols / kDecimationFactor);
+			const int height = std::max(1, m_lastFrame.rows / kDecimationFactor);
+			cv::resize(
+				m_lastFrame, preview,
+				cv::Size(width, height),
+				0.0, 0.0, cv::InterpolationFlags::INTER_NEAREST
+			);
+		}
+		else {
+			preview = m_lastFrame;
+		}
+
+		const int effectiveScale = scale * (isSample ? kDecimationFactor : 1);
+		if (effectiveScale != 100) {
+			const int width = std::max(1, preview.cols * effectiveScale / 100);
+			const int height = std::max(1, preview.rows * effectiveScale / 100);
+			cv::resize(
+				preview, preview,
+				cv::Size(width, height),
+				0.0, 0.0, cv::InterpolationFlags::INTER_LINEAR
+			);
+		}
+
+		cv::imshow("WGC Capture Preview", preview);
+		cv::waitKey(1);
+	}
+	catch (...) {
+		m_statusMessage = L"Failed to build the preview.";
+	}
+}
+
+void MainWindow::saveFrame(bool bgr) {
+	if (m_lastFrame.empty()) {
+		MessageBoxW(
+			m_hwnd,
+			L"No captured frame is available yet.",
+			L"WARNING", MB_ICONWARNING
+		);
+		return;
+	}
+
+	WCHAR path[MAX_PATH] = {};
+	swprintf_s(
+		path,
+		L"capture_%04llu_%s.png",
+		static_cast<unsigned long long>(saveCount),
+		bgr ? L"bgr" : L"bgra"
+	);
+
+	const wchar_t filter[] =
+		L"PNG image (*.png)\0*.png\0All files (*.*)\0*.*\0\0";
+	OPENFILENAMEW dialog = {};
+	dialog.lStructSize = sizeof(dialog);
+	dialog.hwndOwner = m_hwnd;
+	dialog.lpstrFilter = filter;
+	dialog.lpstrFile = path;
+	dialog.nMaxFile = MAX_PATH;
+	dialog.lpstrDefExt = L"png";
+	dialog.Flags = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+
+	if (!GetSaveFileNameW(&dialog))
+		return;
+
+	try {
+		std::filesystem::path file(path);
+		if (_wcsicmp(file.extension().c_str(), L".png") != 0)
+			file.replace_extension(L".png");
+
+		cv::Mat image;
+		if (bgr)
+			cv::cvtColor(
+				m_lastFrame, image,
+				cv::ColorConversionCodes::COLOR_BGRA2BGR
+			);
+		else
+			image = m_lastFrame;
+
+		std::vector<uchar> encoded;
+		if (!cv::imencode(".png", image, encoded))
+			throw std::runtime_error("imencode failed");
+
+		std::ofstream output(file.wstring().c_str(), std::ios::binary);
+		if (!output)
+			throw std::runtime_error("cannot open output file");
+
+		output.write(
+			reinterpret_cast<const char*>(encoded.data()),
+			static_cast<std::streamsize>(encoded.size())
+		);
+		if (!output)
+			throw std::runtime_error("cannot write output file");
+
+		++saveCount;
+		m_statusMessage =
+			std::wstring(L"Saved full-resolution ") +
+			(bgr ? L"3-channel BGR: " : L"4-channel BGRA: ") +
+			file.wstring();
+		updateControls();
+		InvalidateRect(m_hwnd, NULL, true);
+	}
+	catch (std::exception const&) {
+		MessageBoxW(
+			m_hwnd,
+			L"Failed to save the captured frame.",
+			L"ERROR", MB_ICONERROR
+		);
+	}
+}
+
+void MainWindow::updateControls() {
+	if (!hButtonSave || !hButtonSaveC3)
+		return;
+
+	const bool hasFrame = !m_lastFrame.empty();
+	Button_Enable(hButtonSave, hasFrame);
+	Button_Enable(hButtonSaveC3, hasFrame);
+	Button_Enable(hButtonScreen, !m_monitors.empty());
+}
+
+void MainWindow::reportCaptureError(const wchar_t* action) {
+	WCHAR message[1024] = {};
+	swprintf_s(
+		message,
+		L"%s failed.\n\nHRESULT: 0x%08X\n%s",
+		action,
+		static_cast<unsigned int>(wgc::getLastError()),
+		wgc::getLastErrorMessage()
+	);
+	MessageBoxW(m_hwnd, message, L"Capture error", MB_ICONERROR);
+	m_statusMessage = std::wstring(action) + L" failed.";
+}
+
+std::wstring MainWindow::makeMonitorLabel(size_t index) const {
+	if (index >= m_monitors.size())
+		return {};
+
+	const auto& monitor = m_monitors[index];
+	std::wstring label = monitor.getDeviceName();
+	if (label.empty())
+		label = L"Monitor " + std::to_wstring(index + 1);
+
+	label += L" (" + std::to_wstring(monitor.getWidth()) +
+		L"x" + std::to_wstring(monitor.getHeight()) + L")";
+	if (monitor.isPrimary())
+		label += L" [Primary]";
+	return label;
+}
+
 void MainWindow::stopCapture(bool special) {
+	nowSource = SourceKind::None;
 	nowPlay = -1;
+	nowMonitor = -1;
+
 	if (r_capture)
 		r_capture->stopCapture();
 
-	if (!special)
+	if (!special) {
 		SendMessageW(hComboBoxHwnd, CB_SETCURSEL, -1, 0);
+		SendMessageW(hMonitorCombo, CB_SETCURSEL, -1, 0);
+	}
 
 	cv::destroyAllWindows();
+	m_statusMessage = L"Capture stopped.";
+	updateControls();
 
 	if (!special)
 		InvalidateRect(m_hwnd, NULL, true);

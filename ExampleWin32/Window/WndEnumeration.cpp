@@ -20,6 +20,8 @@
 */
 #include "WndEnumeration.h"
 
+#include <algorithm>
+
 namespace {
 
 std::wstring myGetClassName(HWND hwnd) {
@@ -85,6 +87,29 @@ bool isAltTabWindow(ohms::WindowInfo const& window) noexcept {
 }
 
 
+BOOL CALLBACK myEnumMonitorsProc(
+	HMONITOR hmonitor,
+	HDC,
+	LPRECT,
+	LPARAM lParam
+) {
+	MONITORINFOEXW info = {};
+	info.cbSize = sizeof(info);
+	if (!GetMonitorInfoW(hmonitor, &info))
+		return TRUE;
+
+	std::vector<ohms::MonitorInfo>& monitors =
+		*reinterpret_cast<std::vector<ohms::MonitorInfo>*>(lParam);
+
+	monitors.emplace_back(
+		hmonitor,
+		std::wstring(info.szDevice),
+		info.rcMonitor,
+		(info.dwFlags & MONITORINFOF_PRIMARY) != 0
+	);
+	return TRUE;
+}
+
 BOOL CALLBACK myEnumWindowsProc(HWND hwnd, LPARAM lParam) {
 	std::wstring class_name = myGetClassName(hwnd);
 	std::wstring title = myGetWindowText(hwnd);
@@ -129,6 +154,59 @@ std::wstring WindowInfo::getClassName() const {
 
 void EnumerateWindows(std::vector<WindowInfo>& windows) {
 	EnumWindows(::myEnumWindowsProc, reinterpret_cast<LPARAM>(&windows));
+}
+
+MonitorInfo::MonitorInfo() noexcept :
+	m_hmonitor(nullptr),
+	m_rect(),
+	m_primary(false) {}
+
+MonitorInfo::MonitorInfo(
+	HMONITOR hmonitor,
+	std::wstring const& deviceName,
+	RECT const& rect,
+	bool primary
+) :
+	m_hmonitor(hmonitor),
+	m_deviceName(deviceName),
+	m_rect(rect),
+	m_primary(primary) {}
+
+HMONITOR MonitorInfo::getHandle() const noexcept {
+	return m_hmonitor;
+}
+
+std::wstring const& MonitorInfo::getDeviceName() const noexcept {
+	return m_deviceName;
+}
+
+int MonitorInfo::getWidth() const noexcept {
+	return m_rect.right - m_rect.left;
+}
+
+int MonitorInfo::getHeight() const noexcept {
+	return m_rect.bottom - m_rect.top;
+}
+
+bool MonitorInfo::isPrimary() const noexcept {
+	return m_primary;
+}
+
+void EnumerateMonitors(std::vector<MonitorInfo>& monitors) {
+	monitors.clear();
+	EnumDisplayMonitors(
+		nullptr, nullptr, ::myEnumMonitorsProc,
+		reinterpret_cast<LPARAM>(&monitors)
+	);
+
+	std::stable_sort(
+		monitors.begin(), monitors.end(),
+		[](MonitorInfo const& left, MonitorInfo const& right) {
+			if (left.isPrimary() != right.isPrimary())
+				return left.isPrimary();
+			return left.getDeviceName() < right.getDeviceName();
+		}
+	);
 }
 
 }
