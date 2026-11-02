@@ -296,8 +296,11 @@ bool Capturer::StartCapture(
 			return false;
 
 		session = pool.CreateCaptureSession(item);
-		if (!session)
+		if (!session) {
+			try { pool.Close(); }
+			catch (...) {}
 			return false;
+		}
 
 		if (winrt::Windows::Foundation::Metadata::ApiInformation::IsPropertyPresent(
 			winrt::hstring(L"Windows.Graphics.Capture.GraphicsCaptureSession"),
@@ -313,8 +316,13 @@ bool Capturer::StartCapture(
 		}
 
 		const auto weak = weak_from_this();
-		if (weak.expired())
+		if (weak.expired()) {
+			try { session.Close(); }
+			catch (...) {}
+			try { pool.Close(); }
+			catch (...) {}
 			return false;
+		}
 
 		if (callbackMode) {
 			revoker = pool.FrameArrived(
