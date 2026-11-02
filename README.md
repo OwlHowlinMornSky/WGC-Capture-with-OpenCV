@@ -13,6 +13,10 @@ WGC-Capture-with-OpenCV 是 [自由的](https://www.gnu.org/philosophy/free-sw.h
 ## Requirements
 
 * Windows 10 1903 or later (Windows 11 recommended; verified with VS2026/v145).
+* An interactive desktop with DWM. The host process must run at Medium
+  integrity or higher; Low Integrity/AppContainer/sandboxed processes are
+  rejected by WGC with `E_ACCESSDENIED`. Administrator privileges are not
+  required for normal Medium-integrity use.
 * Visual Studio 2026 with the v145 toolset to build the DLL.
 * OpenCV 4.10.0.
 * C++20 for the DLL; the public header itself is C++17-compatible.
