@@ -1,4 +1,4 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.8.34309.116
@@ -13,6 +13,11 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ExampleWin32", "ExampleWin3
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ExampleBasic", "ExampleBasic\ExampleBasic.vcxproj", "{DF2C7211-C422-40FB-9FA3-0F085CE2E93B}"
+	ProjectSection(ProjectDependencies) = postProject
+		{1C431419-2BE8-4024-839C-BF9455796663} = {1C431419-2BE8-4024-839C-BF9455796663}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "WGCSmoke", "Tests\WGCSmoke.vcxproj", "{5A3D6E6B-5D6B-4D8D-9F2C-7B0A2C4F1D31}"
 	ProjectSection(ProjectDependencies) = postProject
 		{1C431419-2BE8-4024-839C-BF9455796663} = {1C431419-2BE8-4024-839C-BF9455796663}
 	EndProjectSection
@@ -49,6 +54,10 @@ Global
 		{DF2C7211-C422-40FB-9FA3-0F085CE2E93B}.Release|x64.Build.0 = Release|x64
 		{DF2C7211-C422-40FB-9FA3-0F085CE2E93B}.Release|x86.ActiveCfg = Release|Win32
 		{DF2C7211-C422-40FB-9FA3-0F085CE2E93B}.Release|x86.Build.0 = Release|Win32
+		{5A3D6E6B-5D6B-4D8D-9F2C-7B0A2C4F1D31}.Debug|x64.ActiveCfg = Debug|x64
+		{5A3D6E6B-5D6B-4D8D-9F2C-7B0A2C4F1D31}.Debug|x64.Build.0 = Debug|x64
+		{5A3D6E6B-5D6B-4D8D-9F2C-7B0A2C4F1D31}.Release|x64.ActiveCfg = Release|x64
+		{5A3D6E6B-5D6B-4D8D-9F2C-7B0A2C4F1D31}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -25,6 +25,17 @@ The project reads OpenCV from `$(OHMS_LIB_DIR)\opencv\4.10.0\build`.
 Define `OHMS_LIB_DIR` (for example `C:\Users\me\dev_libs`) before building.
 `WGC-Capture-with-OpenCV.sln` builds the library and both examples.
 
+## Tests
+
+`Tests/WGCSmoke.vcxproj` (Debug/Release x64) checks factory/capturer lifetime,
+empty-frame behavior, stop/restart, pull mode, callback mode and window capture.
+It requires an interactive desktop with DWM and screen-capture permission.
+When WGC is unavailable the test prints `SKIP` and returns 77; on a normal
+desktop it returns 0 only when every capture check passes.
+
+Run it from the repository root with the OpenCV and `x64\<Configuration>` DLL
+directories on `PATH`.
+
 ## Usage
 
 0. Build or obtain `wgc-capture.dll` (Release) or `wgc-capture-d.dll` (Debug).
