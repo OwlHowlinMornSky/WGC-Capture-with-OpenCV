@@ -269,6 +269,7 @@ bool Capturer::StartCapture(
 	Direct3D11CaptureFramePool pool = { nullptr };
 	GraphicsCaptureSession session = { nullptr };
 	Direct3D11CaptureFramePool::FrameArrived_revoker revoker;
+	GraphicsCaptureItem::Closed_revoker itemClosed;
 
 	try {
 		if (!GraphicsCaptureSession::IsSupported())
@@ -324,6 +325,17 @@ bool Capturer::StartCapture(
 			return false;
 		}
 
+		itemClosed = item.Closed(
+			auto_revoke,
+			[weak](
+				GraphicsCaptureItem const&,
+				winrt::Windows::Foundation::IInspectable const&
+			) {
+				if (auto self = weak.lock())
+					self->stopCapture();
+			}
+		);
+
 		if (callbackMode) {
 			revoker = pool.FrameArrived(
 				auto_revoke,
@@ -357,6 +369,7 @@ bool Capturer::StartCapture(
 			m_framePool = pool;
 			m_session = session;
 			m_frameArrived = std::move(revoker);
+			m_itemClosed = std::move(itemClosed);
 			m_lastSize = size;
 			m_lastTexSize = {};
 			m_target_window.store(window);
@@ -404,6 +417,11 @@ void Capturer::ResetSessionLocked() noexcept {
 	m_target_window.store(nullptr);
 	m_target_monitor.store(nullptr);
 
+	try {
+		m_itemClosed.revoke();
+	}
+	catch (...) {
+	}
 	try {
 		m_frameArrived.revoke();
 	}

@@ -95,6 +95,7 @@ protected:
 	winrt::com_ptr<ID3D11Device> r_d3dDevice; // D3D11 Device relies on D3D Device.
 	winrt::com_ptr<ID3D11DeviceContext> m_d3dContext;
 	winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool::FrameArrived_revoker m_frameArrived;
+	winrt::Windows::Graphics::Capture::GraphicsCaptureItem::Closed_revoker m_itemClosed;
 
 	winrt::com_ptr<ID3D11Texture2D> m_texture;
 	winrt::Windows::Graphics::SizeInt32 m_lastSize;
