@@ -1,4 +1,4 @@
-﻿/*
+/*
 *    WGC-Capture-with-OpenCV
 *
 *     Copyright 2023-2024  Tyler Parret True
@@ -30,7 +30,7 @@ namespace ohms {
 struct WindowInfo final {
 public:
 	WindowInfo() noexcept;
-	WindowInfo(HWND hwnd, std::wstring const& title, std::wstring& className) noexcept;
+	WindowInfo(HWND hwnd, std::wstring const& title, std::wstring const& className);
 	~WindowInfo() = default;
 
 	HWND getHWnd() const noexcept;
@@ -43,6 +43,6 @@ protected:
 	std::wstring m_className;
 }; // sturct WindowInfo
 
-void EnumerateWindows(std::vector<WindowInfo>& windows) noexcept;
+void EnumerateWindows(std::vector<WindowInfo>& windows);
 
 }

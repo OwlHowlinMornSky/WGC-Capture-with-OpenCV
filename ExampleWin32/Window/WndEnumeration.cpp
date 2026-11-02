@@ -1,4 +1,4 @@
-﻿/*
+/*
 *    WGC-Capture-with-OpenCV
 *
 *     Copyright 2023-2024  Tyler Parret True
@@ -23,22 +23,28 @@
 namespace {
 
 std::wstring myGetClassName(HWND hwnd) {
-	std::array<WCHAR, 1024> className;
+	std::array<WCHAR, 1024> className{};
 
-	::GetClassNameW(hwnd, className.data(), static_cast<int>(className.size()));
+	const int length = ::GetClassNameW(
+		hwnd, className.data(), static_cast<int>(className.size())
+	);
+	if (length <= 0)
+		return {};
 
-	std::wstring title(className.data());
-	return title;
+	return std::wstring(className.data(), static_cast<size_t>(length));
 }
 
 
 std::wstring myGetWindowText(HWND hwnd) {
-	std::array<WCHAR, 1024> windowText;
+	std::array<WCHAR, 1024> windowText{};
 
-	::GetWindowTextW(hwnd, windowText.data(), static_cast<int>(windowText.size()));
+	const int length = ::GetWindowTextW(
+		hwnd, windowText.data(), static_cast<int>(windowText.size())
+	);
+	if (length <= 0)
+		return {};
 
-	std::wstring title(windowText.data());
-	return title;
+	return std::wstring(windowText.data(), static_cast<size_t>(length));
 }
 
 
@@ -64,8 +70,8 @@ bool isAltTabWindow(ohms::WindowInfo const& window) noexcept {
 		return false;
 	}
 
-	LONG style = GetWindowLongW(hwnd, GWL_STYLE);
-	if (!((style & WS_DISABLED) != WS_DISABLED)) {
+	const LONG style = GetWindowLongW(hwnd, GWL_STYLE);
+	if (style & WS_DISABLED) {
 		return false;
 	}
 
@@ -103,7 +109,7 @@ namespace ohms {
 WindowInfo::WindowInfo() noexcept :
 	m_hwnd(NULL) {}
 
-WindowInfo::WindowInfo(HWND hwnd, std::wstring const& title, std::wstring& className) noexcept {
+WindowInfo::WindowInfo(HWND hwnd, std::wstring const& title, std::wstring const& className) {
 	m_hwnd = hwnd;
 	m_title = title;
 	m_className = className;
@@ -121,7 +127,7 @@ std::wstring WindowInfo::getClassName() const {
 	return m_className;
 }
 
-void EnumerateWindows(std::vector<WindowInfo>& windows) noexcept {
+void EnumerateWindows(std::vector<WindowInfo>& windows) {
 	EnumWindows(::myEnumWindowsProc, reinterpret_cast<LPARAM>(&windows));
 }
 

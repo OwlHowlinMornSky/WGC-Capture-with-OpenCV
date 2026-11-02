@@ -1,4 +1,4 @@
-﻿/*
+/*
 *    WGC-Capture-with-OpenCV
 *
 *     Copyright 2023-2024  Tyler Parret True
@@ -45,24 +45,37 @@ LRESULT CALLBACK WndProc(
 namespace ohms {
 
 MainWindow::MainWindow() {
-	r_factory = wgc::IFactory::createInstance(false);
-	r_capture = r_factory->createCapturer().lock();
+	r_factory = wgc::IFactory::createInstanceNoThrow(false);
+	if (r_factory) {
+		try {
+			r_capture = r_factory->createCapturer().lock();
+		}
+		catch (...) {
+			r_capture.reset();
+		}
+	}
 }
 
 MainWindow::~MainWindow() {
 	stopCapture();
-	r_factory->destroyCapturer(r_capture);
+	if (r_factory && r_capture)
+		r_factory->destroyCapturer(r_capture);
 	r_capture.reset();
 	r_factory.reset();
 }
 
 bool ohms::MainWindow::create(int nShowCmd) noexcept {
+	if (!r_factory || !r_capture)
+		return false;
 	if (!Parent::create())
 		return false;
+
 	SetWindowTextW(m_hwnd, L"CaptureWithOpenCV");
 
-	//SetTimer(hMain, 1, 300, NULL);
-	SetTimer(m_hwnd, 1, 60, NULL);
+	if (SetTimer(m_hwnd, 1, 60, NULL) == 0) {
+		destroy();
+		return false;
+	}
 
 	return true;
 }
@@ -170,6 +183,7 @@ LRESULT MainWindow::procedure(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		DestroyWindow(hButtonRf);
 		DestroyWindow(hComboBoxHwnd);
 		DeleteObject(hFont);
+		PostQuitMessage(0);
 		break;
 	}
 
@@ -237,12 +251,14 @@ LRESULT MainWindow::procedure(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		{
 			const LRESULT index = SendMessageW((HWND)lParam, CB_GETCURSEL, 0, 0);
 
+			if (index < 0 || static_cast<size_t>(index) >= m_windows.size())
+				break;
 			if (nowPlay == index)
 				break;
 
 			stopCapture(true);
 
-			HWND dst = m_windows.at(index).getHWnd();
+			HWND dst = m_windows.at(static_cast<size_t>(index)).getHWnd();
 
 			if (IsWindow(dst)) {
 				if (!IsIconic(dst)) {
@@ -334,12 +350,12 @@ LRESULT MainWindow::procedure(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		break;
 
 	case WM_TIMER:
-		if (r_capture->isRefreshed()) { // refresh过再处理画面才有意义
-			r_capture->askForRefresh();
-
+		if (r_capture && r_capture->isRefreshed()) {
 			cv::Mat m_mat;
 			r_capture->copyMatTo(m_mat, false); // 不要求转换为BGR
-			cv::imshow("test", m_mat);
+			r_capture->askForRefresh();
+			if (!m_mat.empty())
+				cv::imshow("test", m_mat);
 		}
 		break;
 
@@ -379,7 +395,8 @@ void MainWindow::refreshCombox() {
 
 void MainWindow::stopCapture(bool special) {
 	nowPlay = -1;
-	r_capture->stopCapture();
+	if (r_capture)
+		r_capture->stopCapture();
 
 	if (!special)
 		SendMessageW(hComboBoxHwnd, CB_SETCURSEL, -1, 0);

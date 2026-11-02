@@ -1,4 +1,4 @@
-﻿/*
+/*
 *    WGC-Capture-with-OpenCV
 *
 *     Copyright 2023-2024  Tyler Parret True
@@ -34,9 +34,13 @@ int CALLBACK wWinMain(
 		SetProcessDPIAware();
 
 		ohms::MainWindow mainWnd;
-		mainWnd.create(nShowCmd);
-		MSG msg;
-		while (GetMessageW(&msg, NULL, 0, 0)) {
+		if (!mainWnd.create(nShowCmd)) {
+			MessageBoxW(NULL, L"Failed to create the main window.", L"ERROR", MB_ICONERROR);
+			return 1;
+		}
+
+		MSG msg{};
+		while (GetMessageW(&msg, NULL, 0, 0) > 0) {
 			TranslateMessage(&msg);
 			DispatchMessageW(&msg);
 		}
