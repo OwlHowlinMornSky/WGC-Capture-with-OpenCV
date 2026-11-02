@@ -20,9 +20,9 @@
 */
 
 // You can use Spy++ to get the info about the target window.
-constexpr wchar_t TargetWindowName[] = L"ExampleWindowName";
-constexpr wchar_t TargetWindowName2[] = L"ExampleWindowName";
-constexpr wchar_t TargetWindowClass[] = L"ExampleClassName";
+constexpr wchar_t TargetWindowName[] = L"Everything";
+constexpr wchar_t TargetWindowName2[] = L"Everything";
+constexpr wchar_t TargetWindowClass[] = L"EVERYTHING";
 constexpr bool    TestCaptureMonitor = true;
 constexpr bool    TestFreeThreaded = true;
 
@@ -86,6 +86,16 @@ std::shared_ptr<wgc::ICapturer> MakeCapturer(wgc::IFactory& factory) {
 	}
 }
 
+void PrintLastError(const wchar_t* action) {
+	std::wcerr << action << L" failed: 0x"
+		<< std::hex << static_cast<unsigned long>(wgc::getLastError())
+		<< std::dec;
+	const wchar_t* message = wgc::getLastErrorMessage();
+	if (message && *message)
+		std::wcerr << L" - " << message;
+	std::wcerr << std::endl;
+}
+
 } // namespace
 
 int TestNormal();
@@ -120,7 +130,7 @@ int TestNormal() {
 			return 3;
 		}
 		if (!capture1->startCaptureMonitor(monitor, TestFreeThreaded)) {
-			std::cerr << "Failed to start monitor capture." << std::endl;
+			PrintLastError(L"startCaptureMonitor");
 			return 4;
 		}
 	}
@@ -142,7 +152,7 @@ int TestNormal() {
 		capture2->setClipToClientArea(true);
 		if (!capture1->startCaptureWindow(hwnd, TestFreeThreaded) ||
 			!capture2->startCaptureWindow(hwnd2, TestFreeThreaded)) {
-			std::cerr << "Failed to start window capture." << std::endl;
+			PrintLastError(L"startCaptureWindow");
 			capture1->stopCapture();
 			capture2->stopCapture();
 			return 7;
@@ -206,7 +216,7 @@ int TestCallback() {
 			monitor,
 			[&mailbox1](const cv::Mat& mat) { mailbox1.push(mat); }
 		)) {
-			std::cerr << "Failed to start callback monitor capture." << std::endl;
+			PrintLastError(L"startCaptureMonitorWithCallback");
 			return 4;
 		}
 	}
@@ -238,7 +248,7 @@ int TestCallback() {
 						mailbox2->push(mat);
 				}
 			)) {
-			std::cerr << "Failed to start callback window capture." << std::endl;
+			PrintLastError(L"startCaptureWindowWithCallback");
 			capture1->stopCapture();
 			if (capture2)
 				capture2->stopCapture();

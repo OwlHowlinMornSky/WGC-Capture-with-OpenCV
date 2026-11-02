@@ -1,4 +1,4 @@
-﻿/*
+/*
 *    WGC-Capture-with-OpenCV
 *
 *     Copyright 2023-2025  Tyler Parret True
@@ -196,5 +196,18 @@ public:
 	 */
 	virtual size_t getId() const = 0;
 };
+
+/**
+ * @brief Get the last capture error on the calling thread.
+ * @brief Returns S_OK when the last start/stop operation succeeded.
+ */
+WGCCAPTUREWITHOPENCV_API HRESULT getLastError() noexcept;
+
+/**
+ * @brief Get a human-readable description of getLastError() on the calling thread.
+ * @brief The returned pointer is owned by the library and is valid until the next
+ *        capture call on the same thread.
+ */
+WGCCAPTUREWITHOPENCV_API const wchar_t* getLastErrorMessage() noexcept;
 
 } // namespace wgc

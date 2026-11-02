@@ -34,7 +34,13 @@ When WGC is unavailable the test prints `SKIP` and returns 77; on a normal
 desktop it returns 0 only when every capture check passes.
 
 Run it from the repository root with the OpenCV and `x64\<Configuration>` DLL
-directories on `PATH`.
+directories on `PATH`. It prints the process integrity level, session id, remote
+session flag and the library's last HRESULT, so an `E_ACCESSDENIED` can be
+distinguished from a capture/parameter bug.
+
+When a `startCapture*` call returns false, call `wgc::getLastError()` and
+`wgc::getLastErrorMessage()` (both thread-local). ExampleBasic and ExampleWin32
+now display these values.
 
 ## Usage
 

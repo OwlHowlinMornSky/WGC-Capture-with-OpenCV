@@ -22,10 +22,59 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <vector>
 
 namespace {
 
 int g_failures = 0;
+
+DWORD CurrentIntegrityRid() {
+	HANDLE token = nullptr;
+	if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token))
+		return 0;
+
+	DWORD size = 0;
+	GetTokenInformation(token, TokenIntegrityLevel, nullptr, 0, &size);
+	DWORD integrity = 0;
+	if (size > 0) {
+		std::vector<BYTE> buffer(size);
+		if (GetTokenInformation(
+				token, TokenIntegrityLevel,
+				buffer.data(), size, &size
+			)) {
+			const auto* label =
+				reinterpret_cast<const TOKEN_MANDATORY_LABEL*>(buffer.data());
+			const PSID sid = label->Label.Sid;
+			const DWORD count = *GetSidSubAuthorityCount(sid);
+			if (count > 0)
+				integrity = *GetSidSubAuthority(sid, count - 1);
+		}
+	}
+	CloseHandle(token);
+	return integrity;
+}
+
+const char* IntegrityName(DWORD rid) {
+	if (rid >= SECURITY_MANDATORY_SYSTEM_RID)
+		return "System";
+	if (rid >= SECURITY_MANDATORY_HIGH_RID)
+		return "High";
+	if (rid >= SECURITY_MANDATORY_MEDIUM_RID)
+		return "Medium";
+	if (rid >= SECURITY_MANDATORY_LOW_RID)
+		return "Low";
+	return "Untrusted";
+}
+
+void PrintLastError(const char* action) {
+	std::cerr << action << " failed: 0x"
+		<< std::hex << static_cast<unsigned long>(wgc::getLastError())
+		<< std::dec;
+	const wchar_t* message = wgc::getLastErrorMessage();
+	if (message && *message)
+		std::wcerr << L" - " << message;
+	std::cerr << std::endl;
+}
 
 void Check(bool condition, const char* description) {
 	std::cout << (condition ? "[PASS] " : "[FAIL] ") << description << std::endl;
@@ -129,6 +178,17 @@ bool StartPull(const std::shared_ptr<wgc::ICapturer>& capturer, HMONITOR monitor
 int main() {
 	SetProcessDPIAware();
 
+	const DWORD integrity = CurrentIntegrityRid();
+	std::cout << "Process integrity: 0x" << std::hex << integrity << std::dec
+		<< " (" << IntegrityName(integrity) << ")" << std::endl;
+	std::cout << "Remote session: "
+		<< (GetSystemMetrics(SM_REMOTESESSION) ? "yes" : "no") << std::endl;
+	std::cout << "Session id: " << [] {
+		DWORD session = 0;
+		ProcessIdToSessionId(GetCurrentProcessId(), &session);
+		return session;
+	}() << std::endl;
+
 	const HMONITOR monitor = MonitorFromPoint(
 		POINT{ 0, 0 }, MONITOR_DEFAULTTOPRIMARY
 	);
@@ -158,8 +218,10 @@ int main() {
 
 	std::cout << "Testing monitor pull mode..." << std::endl;
 	if (!StartPull(capturer, monitor)) {
+		PrintLastError("startCaptureMonitor");
 		std::cout << "[SKIP] WGC capture is unavailable in this desktop session "
-			<< "(requires DWM and screen-capture permission)." << std::endl;
+			<< "(requires an interactive DWM desktop and screen-capture permission)."
+			<< std::endl;
 		captureAvailable = false;
 		Check(!capturer->isCapturing(), "failed start leaves the capturer stopped");
 		cv::Mat afterFailedStart;

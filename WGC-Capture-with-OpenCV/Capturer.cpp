@@ -33,6 +33,10 @@ using namespace winrt::Windows::Graphics::Capture;
 using namespace winrt::Windows::Graphics::DirectX;
 using namespace winrt::Windows::Graphics::DirectX::Direct3D11;
 
+namespace wgc {
+void SetCaptureError(HRESULT code, const wchar_t* message) noexcept;
+}
+
 namespace {
 
 extern "C" {
@@ -130,14 +134,22 @@ inline bool CreateCaptureItemForWindow(GraphicsCaptureItem& item, HWND hwnd) {
 	auto activation_factory = get_activation_factory<GraphicsCaptureItem>();
 	auto interop_factory = activation_factory.as<IGraphicsCaptureItemInterop>();
 	const auto res = interop_factory->CreateForWindow(hwnd, guid_of<IGraphicsCaptureItem>(), put_abi(item));
-	return res == S_OK;
+	if (FAILED(res)) {
+		wgc::SetCaptureError(res, L"CreateForWindow failed.");
+		return false;
+	}
+	return true;
 }
 
 inline bool CreateCaptureItemForMonitor(GraphicsCaptureItem& item, HMONITOR hmonitor) {
 	auto activation_factory = get_activation_factory<GraphicsCaptureItem>();
 	auto interop_factory = activation_factory.as<IGraphicsCaptureItemInterop>();
 	const auto res = interop_factory->CreateForMonitor(hmonitor, guid_of<IGraphicsCaptureItem>(), put_abi(item));
-	return res == S_OK;
+	if (FAILED(res)) {
+		wgc::SetCaptureError(res, L"CreateForMonitor failed.");
+		return false;
+	}
+	return true;
 }
 
 } // namespace 
@@ -180,11 +192,14 @@ Capturer::~Capturer() {
 }
 
 bool Capturer::startCaptureWindow(HWND hwnd, bool freeThreaded) {
+	SetCaptureError(S_OK, nullptr);
 	stopCapture();
 
 	try {
-		if (!IsWindow(hwnd) || IsIconic(hwnd))
+		if (!IsWindow(hwnd) || IsIconic(hwnd)) {
+			SetCaptureError(E_INVALIDARG, L"Window is invalid or minimized.");
 			return false;
+		}
 
 		GraphicsCaptureItem item = { nullptr };
 		if (!CreateCaptureItemForWindow(item, hwnd) || !item)
@@ -192,18 +207,27 @@ bool Capturer::startCaptureWindow(HWND hwnd, bool freeThreaded) {
 
 		return StartCapture(item, freeThreaded, hwnd, nullptr, {});
 	}
+	catch (winrt::hresult_error const& ex) {
+		SetCaptureError(ex.code(), ex.message().c_str());
+		stopCapture();
+		return false;
+	}
 	catch (...) {
+		SetCaptureError(E_FAIL, L"Unknown exception while starting window capture.");
 		stopCapture();
 		return false;
 	}
 }
 
 bool Capturer::startCaptureMonitor(HMONITOR hmonitor, bool freeThreaded) {
+	SetCaptureError(S_OK, nullptr);
 	stopCapture();
 
 	try {
-		if (hmonitor == nullptr)
+		if (hmonitor == nullptr) {
+			SetCaptureError(E_INVALIDARG, L"Monitor handle is null.");
 			return false;
+		}
 
 		GraphicsCaptureItem item = { nullptr };
 		if (!CreateCaptureItemForMonitor(item, hmonitor) || !item)
@@ -211,18 +235,27 @@ bool Capturer::startCaptureMonitor(HMONITOR hmonitor, bool freeThreaded) {
 
 		return StartCapture(item, freeThreaded, nullptr, hmonitor, {});
 	}
+	catch (winrt::hresult_error const& ex) {
+		SetCaptureError(ex.code(), ex.message().c_str());
+		stopCapture();
+		return false;
+	}
 	catch (...) {
+		SetCaptureError(E_FAIL, L"Unknown exception while starting monitor capture.");
 		stopCapture();
 		return false;
 	}
 }
 
 bool Capturer::startCaptureWindowWithCallback(HWND hwnd, std::function<void(const cv::Mat&)> cb) {
+	SetCaptureError(S_OK, nullptr);
 	stopCapture();
 
 	try {
-		if (!cb || !IsWindow(hwnd) || IsIconic(hwnd))
+		if (!cb || !IsWindow(hwnd) || IsIconic(hwnd)) {
+			SetCaptureError(E_INVALIDARG, L"Window or callback is invalid.");
 			return false;
+		}
 
 		GraphicsCaptureItem item = { nullptr };
 		if (!CreateCaptureItemForWindow(item, hwnd) || !item)
@@ -230,18 +263,27 @@ bool Capturer::startCaptureWindowWithCallback(HWND hwnd, std::function<void(cons
 
 		return StartCapture(item, true, hwnd, nullptr, std::move(cb));
 	}
+	catch (winrt::hresult_error const& ex) {
+		SetCaptureError(ex.code(), ex.message().c_str());
+		stopCapture();
+		return false;
+	}
 	catch (...) {
+		SetCaptureError(E_FAIL, L"Unknown exception while starting window capture.");
 		stopCapture();
 		return false;
 	}
 }
 
 bool Capturer::startCaptureMonitorWithCallback(HMONITOR hmonitor, std::function<void(const cv::Mat&)> cb) {
+	SetCaptureError(S_OK, nullptr);
 	stopCapture();
 
 	try {
-		if (!cb || hmonitor == nullptr)
+		if (!cb || hmonitor == nullptr) {
+			SetCaptureError(E_INVALIDARG, L"Monitor or callback is invalid.");
 			return false;
+		}
 
 		GraphicsCaptureItem item = { nullptr };
 		if (!CreateCaptureItemForMonitor(item, hmonitor) || !item)
@@ -249,7 +291,13 @@ bool Capturer::startCaptureMonitorWithCallback(HMONITOR hmonitor, std::function<
 
 		return StartCapture(item, true, nullptr, hmonitor, std::move(cb));
 	}
+	catch (winrt::hresult_error const& ex) {
+		SetCaptureError(ex.code(), ex.message().c_str());
+		stopCapture();
+		return false;
+	}
 	catch (...) {
+		SetCaptureError(E_FAIL, L"Unknown exception while starting monitor capture.");
 		stopCapture();
 		return false;
 	}
@@ -262,8 +310,10 @@ bool Capturer::StartCapture(
 	HMONITOR monitor,
 	std::function<void(const cv::Mat&)> callback
 ) {
-	if (!item)
+	if (!item) {
+		SetCaptureError(E_INVALIDARG, L"GraphicsCaptureItem is null.");
 		return false;
+	}
 
 	const bool callbackMode = static_cast<bool>(callback);
 	Direct3D11CaptureFramePool pool = { nullptr };
@@ -272,18 +322,27 @@ bool Capturer::StartCapture(
 	GraphicsCaptureItem::Closed_revoker itemClosed;
 
 	try {
-		if (!GraphicsCaptureSession::IsSupported())
+		if (!GraphicsCaptureSession::IsSupported()) {
+			SetCaptureError(E_NOTIMPL, L"Windows Graphics Capture is not supported.");
 			return false;
+		}
 
 		if (!freeThreaded &&
-			!winrt::Windows::System::DispatcherQueue::GetForCurrentThread())
+			!winrt::Windows::System::DispatcherQueue::GetForCurrentThread()) {
+			SetCaptureError(
+				E_INVALIDARG,
+				L"freeThreaded=false requires a DispatcherQueue on the calling thread."
+			);
 			return false;
+		}
 
 		const SizeInt32 size = item.Size();
 		if (size.Width <= 0 || size.Height <= 0 ||
 			size.Width > D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION ||
-			size.Height > D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION)
+			size.Height > D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION) {
+			SetCaptureError(E_INVALIDARG, L"Capture item has an invalid size.");
 			return false;
+		}
 
 		if (freeThreaded)
 			pool = Direct3D11CaptureFramePool::CreateFreeThreaded(
@@ -293,11 +352,14 @@ bool Capturer::StartCapture(
 			pool = Direct3D11CaptureFramePool::Create(
 				r_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, size
 			);
-		if (!pool)
+		if (!pool) {
+			SetCaptureError(E_FAIL, L"Failed to create the D3D11 capture frame pool.");
 			return false;
+		}
 
 		session = pool.CreateCaptureSession(item);
 		if (!session) {
+			SetCaptureError(E_FAIL, L"Failed to create the capture session.");
 			try { pool.Close(); }
 			catch (...) {}
 			return false;
@@ -326,6 +388,7 @@ bool Capturer::StartCapture(
 
 		const auto weak = weak_from_this();
 		if (weak.expired()) {
+			SetCaptureError(E_FAIL, L"Capturer is not owned by a shared_ptr.");
 			try { session.Close(); }
 			catch (...) {}
 			try { pool.Close(); }
@@ -392,6 +455,7 @@ bool Capturer::StartCapture(
 		}
 
 		if (!textureReady) {
+			SetCaptureError(E_FAIL, L"Failed to create the staging texture.");
 			stopCapture();
 			return false;
 		}
@@ -401,7 +465,21 @@ bool Capturer::StartCapture(
 			askForRefresh();
 		return true;
 	}
+	catch (winrt::hresult_error const& ex) {
+		SetCaptureError(ex.code(), ex.message().c_str());
+		if (session) {
+			try { session.Close(); }
+			catch (...) {}
+		}
+		if (pool) {
+			try { pool.Close(); }
+			catch (...) {}
+		}
+		stopCapture();
+		return false;
+	}
 	catch (...) {
+		SetCaptureError(E_FAIL, L"Unknown exception while starting capture.");
 		if (session) {
 			try { session.Close(); }
 			catch (...) {}

@@ -21,6 +21,7 @@
 #include "MainWindow.h"
 
 #include <opencv2/opencv.hpp>
+#include <cstdio>
 
 #include "WndEnumeration.h"
 #include "macro.h"
@@ -272,7 +273,14 @@ LRESULT MainWindow::procedure(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 					}
 					else {
 						stopCapture();
-						MessageBoxW(hwnd, L"This window cannot be captured.", L"ERROR", MB_ICONERROR);
+						WCHAR message[512];
+						swprintf_s(
+							message,
+							L"This window cannot be captured.\n\nHRESULT: 0x%08X\n%s",
+							static_cast<unsigned int>(wgc::getLastError()),
+							wgc::getLastErrorMessage()
+						);
+						MessageBoxW(hwnd, message, L"ERROR", MB_ICONERROR);
 					}
 				}
 				else {
