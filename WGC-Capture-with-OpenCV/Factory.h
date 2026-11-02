@@ -1,4 +1,4 @@
-﻿/*
+/*
 *    WGC-Capture-with-OpenCV
 *
 *     Copyright 2023-2025  Tyler Parret True
@@ -24,6 +24,7 @@
 
 #include "include/WGC/WGC.h"
 #include <map>
+#include <mutex>
 
 namespace wgc {
 
@@ -39,6 +40,7 @@ public:
 
 protected:
 	std::map<size_t, std::shared_ptr<ICapturer>> m_capturers;
+	std::mutex m_mutex;
 };
 
 } // namespace wgc

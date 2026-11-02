@@ -1,4 +1,4 @@
-﻿/*
+/*
 *    WGC-Capture-with-OpenCV
 *
 *     Copyright 2023-2025  Tyler Parret True
@@ -32,23 +32,15 @@ std::shared_ptr<IFactory> IFactory::createInstance(bool winrt_initialized) {
 }
 
 std::shared_ptr<IFactory> IFactory::createInstanceNoThrow(bool winrt_initialized) noexcept {
-	if (!winrt_initialized) {
-		try {
+	try {
+		if (!winrt_initialized) {
 			winrt::init_apartment();
 		}
-		catch (winrt::hresult_error const& ex) {
-			winrt::hresult hr = ex.code(); // HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND).
-			winrt::hstring message = ex.message(); // The system cannot find the file specified.
-			MessageBoxW(NULL, message.c_str(), L"WGC: WinRT init failed", MB_ICONERROR);
-		}
-	}
-	try {
 		return std::make_shared<wgc::Factory>();
 	}
 	catch (...) {
-		MessageBoxW(NULL, L"Failed to create instance.", L"WGC: Init failed", MB_ICONERROR);
+		return nullptr;
 	}
-	return nullptr;
 }
 
 } // namespace wgc

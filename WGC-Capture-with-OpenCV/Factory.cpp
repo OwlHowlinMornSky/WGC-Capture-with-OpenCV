@@ -1,4 +1,4 @@
-﻿/*
+/*
 *    WGC-Capture-with-OpenCV
 *
 *     Copyright 2023-2025  Tyler Parret True
@@ -22,9 +22,11 @@
 #include "Factory.h"
 #include "Capturer.h"
 
+#include <atomic>
+
 namespace {
 
-size_t g_capturerCnt = 0;
+std::atomic<size_t> g_capturerCnt{ 0 };
 
 } // namespace 
 
@@ -33,13 +35,21 @@ namespace wgc {
 Factory::Factory() = default;
 
 Factory::~Factory() {
-	m_capturers.clear();
+	std::map<size_t, std::shared_ptr<ICapturer>> capturers;
+	{
+		std::lock_guard lock(m_mutex);
+		capturers.swap(m_capturers);
+	}
+	capturers.clear();
 }
 
 std::weak_ptr<ICapturer> Factory::createCapturer() {
-	size_t id = g_capturerCnt++;
+	const size_t id = g_capturerCnt.fetch_add(1, std::memory_order_relaxed);
 	auto capture = std::make_shared<Capturer>(id);
-	m_capturers.emplace(id, capture);
+	{
+		std::lock_guard lock(m_mutex);
+		m_capturers.emplace(id, capture);
+	}
 	return capture;
 }
 
@@ -47,11 +57,11 @@ void Factory::destroyCapturer(std::weak_ptr<ICapturer> instance) {
 	auto capturer = instance.lock();
 	if (capturer == nullptr)
 		return;
-	auto id = capturer->getId();
-	auto it = m_capturers.find(id);
-	if (it == m_capturers.end())
-		return;
-	m_capturers.erase(it);
+	const auto id = capturer->getId();
+	{
+		std::lock_guard lock(m_mutex);
+		m_capturers.erase(id);
+	}
 }
 
 } // namespace wgc
