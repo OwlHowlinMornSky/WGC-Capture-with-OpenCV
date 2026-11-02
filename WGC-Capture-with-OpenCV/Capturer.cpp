@@ -303,17 +303,25 @@ bool Capturer::StartCapture(
 			return false;
 		}
 
-		if (winrt::Windows::Foundation::Metadata::ApiInformation::IsPropertyPresent(
-			winrt::hstring(L"Windows.Graphics.Capture.GraphicsCaptureSession"),
-			winrt::hstring(L"IsCursorCaptureEnabled")
-		)) {
-			session.IsCursorCaptureEnabled(false);
+		try {
+			if (winrt::Windows::Foundation::Metadata::ApiInformation::IsPropertyPresent(
+				winrt::hstring(L"Windows.Graphics.Capture.GraphicsCaptureSession"),
+				winrt::hstring(L"IsCursorCaptureEnabled")
+			)) {
+				session.IsCursorCaptureEnabled(false);
+			}
 		}
-		if (winrt::Windows::Foundation::Metadata::ApiInformation::IsPropertyPresent(
-			winrt::hstring(L"Windows.Graphics.Capture.GraphicsCaptureSession"),
-			winrt::hstring(L"IsBorderRequired")
-		)) {
-			session.IsBorderRequired(false);
+		catch (...) {
+		}
+		try {
+			if (winrt::Windows::Foundation::Metadata::ApiInformation::IsPropertyPresent(
+				winrt::hstring(L"Windows.Graphics.Capture.GraphicsCaptureSession"),
+				winrt::hstring(L"IsBorderRequired")
+			)) {
+				session.IsBorderRequired(false);
+			}
+		}
+		catch (...) {
 		}
 
 		const auto weak = weak_from_this();
@@ -577,8 +585,8 @@ void Capturer::OnFrameArrived(
 		if (frameContentSize.Width > 0 && frameContentSize.Height > 0 &&
 			(m_lastSize.Width != frameContentSize.Width ||
 				m_lastSize.Height != frameContentSize.Height)) {
+			m_framePool.Recreate(r_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, frameContentSize);
 			m_lastSize = frameContentSize;
-			m_framePool.Recreate(r_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
 		}
 	}
 	catch (...) {
@@ -640,8 +648,8 @@ void Capturer::OnFrameArrivedWithCallback(
 		if (frameContentSize.Width > 0 && frameContentSize.Height > 0 &&
 			(m_lastSize.Width != frameContentSize.Width ||
 				m_lastSize.Height != frameContentSize.Height)) {
+			m_framePool.Recreate(r_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, frameContentSize);
 			m_lastSize = frameContentSize;
-			m_framePool.Recreate(r_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
 		}
 
 		cv::Mat frameCopy;
