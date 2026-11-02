@@ -71,7 +71,8 @@ protected:
 		winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool const& sender,
 		winrt::Windows::Foundation::IInspectable const& args
 	); // 注意这个方法不锁mat，不管needUpdate，也不设置updated。
-	void CreateTexture();
+	bool CreateTexture(winrt::Windows::Graphics::SizeInt32 size);
+	bool UpdateMatFromTexture();
 
 protected:
 	size_t m_id;
@@ -85,7 +86,7 @@ protected:
 	winrt::com_ptr<ID3D11DeviceContext> m_d3dContext;
 	winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool::FrameArrived_revoker m_frameArrived;
 
-	ID3D11Texture2D* m_texture;
+	winrt::com_ptr<ID3D11Texture2D> m_texture;
 	winrt::Windows::Graphics::SizeInt32 m_lastSize;
 	winrt::Windows::Graphics::SizeInt32 m_lastTexSize;
 

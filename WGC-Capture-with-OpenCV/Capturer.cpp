@@ -22,6 +22,7 @@
 #include "Capturer.h"
 #include <windows.graphics.capture.interop.h>
 #include <dwmapi.h>
+#include <cstring>
 
 using namespace winrt;
 using namespace winrt::Windows::Foundation;
@@ -200,7 +201,8 @@ bool Capturer::startCaptureWindow(HWND hwnd, bool freeThreaded) {
 	m_session.IsCursorCaptureEnabled(false);
 	m_session.IsBorderRequired(false);
 
-	CreateTexture();
+	if (!CreateTexture(m_lastTexSize))
+		return false;
 
 	m_session.StartCapture();
 	askForRefresh();
@@ -236,7 +238,8 @@ bool Capturer::startCaptureMonitor(HMONITOR hmonitor, bool freeThreaded) {
 	m_session.IsCursorCaptureEnabled(false);
 	m_session.IsBorderRequired(false);
 
-	CreateTexture();
+	if (!CreateTexture(m_lastTexSize))
+		return false;
 
 	m_session.StartCapture();
 	askForRefresh();
@@ -269,7 +272,8 @@ bool Capturer::startCaptureWindowWithCallback(HWND hwnd, std::function<void(cons
 	m_session.IsCursorCaptureEnabled(false);
 	m_session.IsBorderRequired(false);
 
-	CreateTexture();
+	if (!CreateTexture(m_lastTexSize))
+		return false;
 
 	m_callback = cb;
 	m_session.StartCapture();
@@ -303,7 +307,8 @@ bool Capturer::startCaptureMonitorWithCallback(HMONITOR hmonitor, std::function<
 	m_session.IsCursorCaptureEnabled(false);
 	m_session.IsBorderRequired(false);
 
-	CreateTexture();
+	if (!CreateTexture(m_lastTexSize))
+		return false;
 
 	m_callback = cb;
 	m_session.StartCapture();
@@ -324,7 +329,6 @@ void Capturer::stopCapture() {
 	m_framePool.Close();
 	m_session.Close();
 
-	m_texture->Release();
 	m_texture = nullptr;
 
 	m_framePool = nullptr;
@@ -333,6 +337,13 @@ void Capturer::stopCapture() {
 
 	m_d3dContext = nullptr;
 	r_d3dDevice = nullptr;
+
+	{
+		std::lock_guard lock(m_mutex_cap);
+		m_cap.release();
+	}
+	m_img_needRefresh.store(false);
+	m_img_updated.store(false);
 
 	m_img_clientarea = false;
 }
@@ -363,14 +374,16 @@ void Capturer::askForRefresh() {
 }
 
 bool Capturer::isRefreshed() {
-	bool expected = true;
-	if (m_img_updated.compare_exchange_weak(expected, false))
-		return true;
-	return false;
+	return m_img_updated.exchange(false);
 }
 
 void Capturer::copyMatTo(cv::Mat& target, bool convertToBGR) {
 	std::lock_guard<std::mutex> lock(m_mutex_cap);
+	if (m_cap.empty()) {
+		target.release();
+		return;
+	}
+
 	if (convertToBGR)
 		cv::cvtColor(m_cap, target, cv::ColorConversionCodes::COLOR_BGRA2BGR, 3);
 	else
@@ -390,12 +403,11 @@ void Capturer::OnFrameArrived(
 	const Direct3D11CaptureFrame frame = sender.TryGetNextFrame();
 	const SizeInt32 frameContentSize = frame.ContentSize();
 
-	bool expected = true;
-	if (m_img_needRefresh.compare_exchange_weak(expected, false)) {
+	if (m_img_needRefresh.exchange(false)) {
 		com_ptr<ID3D11Texture2D> frameSurface = ::GetDXGIInterfaceFromObject<ID3D11Texture2D>(frame.Surface());
 
 		/* need GetDesc because ContentSize is not reliable */
-		D3D11_TEXTURE2D_DESC desc;
+		D3D11_TEXTURE2D_DESC desc = {};
 		frameSurface->GetDesc(&desc);
 
 		bool client_clip_success = false;
@@ -405,28 +417,20 @@ void Capturer::OnFrameArrived(
 			client_clip_success = true;
 		}
 
-		if (m_lastTexSize.Width != desc.Width || m_lastTexSize.Height != desc.Height) {
-			m_lastTexSize.Width = desc.Width;
-			m_lastTexSize.Height = desc.Height;
-			CreateTexture();
-		}
+		const SizeInt32 targetSize{
+			static_cast<int32_t>(desc.Width),
+			static_cast<int32_t>(desc.Height)
+		};
+		if (!CreateTexture(targetSize))
+			return;
 
 		if (client_clip_success)
-			m_d3dContext->CopySubresourceRegion(m_texture, 0, 0, 0, 0, frameSurface.get(), 0, &m_client_box);
+			m_d3dContext->CopySubresourceRegion(m_texture.get(), 0, 0, 0, 0, frameSurface.get(), 0, &m_client_box);
 		else
-			m_d3dContext->CopyResource(m_texture, frameSurface.get());
+			m_d3dContext->CopyResource(m_texture.get(), frameSurface.get());
 
-		D3D11_MAPPED_SUBRESOURCE mappedTex;
-		m_d3dContext->Map(m_texture, 0, D3D11_MAP_READ, 0, &mappedTex);
-		m_d3dContext->Unmap(m_texture, 0);
-		{
-			std::lock_guard lock(m_mutex_cap);
-			m_cap = cv::Mat(
-				m_lastTexSize.Height, m_lastTexSize.Width,
-				CV_8UC4, mappedTex.pData, mappedTex.RowPitch
-			);
-		}
-		m_img_updated.store(true);
+		if (!UpdateMatFromTexture())
+			return;
 	}
 
 	if (m_lastSize.Width != frameContentSize.Width ||
@@ -448,7 +452,7 @@ void Capturer::OnFrameArrivedWithCallback(
 	com_ptr<ID3D11Texture2D> frameSurface = ::GetDXGIInterfaceFromObject<ID3D11Texture2D>(frame.Surface());
 
 	/* need GetDesc because ContentSize is not reliable */
-	D3D11_TEXTURE2D_DESC desc;
+	D3D11_TEXTURE2D_DESC desc = {};
 	frameSurface->GetDesc(&desc);
 
 	bool client_clip_success = false;
@@ -458,24 +462,20 @@ void Capturer::OnFrameArrivedWithCallback(
 		client_clip_success = true;
 	}
 
-	if (m_lastTexSize.Width != desc.Width || m_lastTexSize.Height != desc.Height) {
-		m_lastTexSize.Width = desc.Width;
-		m_lastTexSize.Height = desc.Height;
-		CreateTexture();
-	}
+	const SizeInt32 targetSize{
+		static_cast<int32_t>(desc.Width),
+		static_cast<int32_t>(desc.Height)
+	};
+	if (!CreateTexture(targetSize))
+		return;
 
 	if (client_clip_success)
-		m_d3dContext->CopySubresourceRegion(m_texture, 0, 0, 0, 0, frameSurface.get(), 0, &m_client_box);
+		m_d3dContext->CopySubresourceRegion(m_texture.get(), 0, 0, 0, 0, frameSurface.get(), 0, &m_client_box);
 	else
-		m_d3dContext->CopyResource(m_texture, frameSurface.get());
+		m_d3dContext->CopyResource(m_texture.get(), frameSurface.get());
 
-	D3D11_MAPPED_SUBRESOURCE mappedTex;
-	m_d3dContext->Map(m_texture, 0, D3D11_MAP_READ, 0, &mappedTex);
-	m_d3dContext->Unmap(m_texture, 0);
-	m_cap = cv::Mat(
-		m_lastTexSize.Height, m_lastTexSize.Width,
-		CV_8UC4, mappedTex.pData, mappedTex.RowPitch
-	);
+	if (!UpdateMatFromTexture())
+		return;
 
 	m_callback(m_cap);
 
@@ -486,13 +486,20 @@ void Capturer::OnFrameArrivedWithCallback(
 	}
 }
 
-inline void Capturer::CreateTexture() {
-	if (m_texture) {
-		m_texture->Release();
-		m_texture = nullptr;
-	}
+bool Capturer::CreateTexture(SizeInt32 size) {
+	if (!r_d3dDevice || !m_d3dContext)
+		return false;
+	if (size.Width <= 0 || size.Height <= 0)
+		return false;
+	if (size.Width > D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION ||
+		size.Height > D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION)
+		return false;
+	if (m_texture &&
+		m_lastTexSize.Width == size.Width &&
+		m_lastTexSize.Height == size.Height)
+		return true;
 
-	D3D11_TEXTURE2D_DESC desc = { 0 };
+	D3D11_TEXTURE2D_DESC desc = {};
 	desc.MipLevels = 1;
 	desc.ArraySize = 1;
 	desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
@@ -501,10 +508,58 @@ inline void Capturer::CreateTexture() {
 	desc.BindFlags = 0;
 	desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
 	desc.MiscFlags = 0;
-	desc.Width = m_lastTexSize.Width;
-	desc.Height = m_lastTexSize.Height;
+	desc.Width = static_cast<UINT>(size.Width);
+	desc.Height = static_cast<UINT>(size.Height);
 
-	r_d3dDevice.get()->CreateTexture2D(&desc, nullptr, &m_texture);
+	com_ptr<ID3D11Texture2D> texture;
+	const HRESULT hr = r_d3dDevice->CreateTexture2D(&desc, nullptr, texture.put());
+	if (FAILED(hr) || !texture)
+		return false;
+
+	m_texture = std::move(texture);
+	m_lastTexSize = size;
+	return true;
+}
+
+bool Capturer::UpdateMatFromTexture() {
+	if (!m_texture || !m_d3dContext)
+		return false;
+	if (m_lastTexSize.Width <= 0 || m_lastTexSize.Height <= 0)
+		return false;
+
+	const int width = m_lastTexSize.Width;
+	const int height = m_lastTexSize.Height;
+	const size_t rowBytes = static_cast<size_t>(width) * 4;
+
+	cv::Mat frame(height, width, CV_8UC4);
+
+	D3D11_MAPPED_SUBRESOURCE mappedTex = {};
+	const HRESULT hr = m_d3dContext->Map(
+		m_texture.get(), 0, D3D11_MAP_READ, 0, &mappedTex
+	);
+	if (FAILED(hr))
+		return false;
+	if (mappedTex.pData == nullptr || mappedTex.RowPitch < rowBytes) {
+		m_d3dContext->Unmap(m_texture.get(), 0);
+		return false;
+	}
+
+	const auto* src = static_cast<const uint8_t*>(mappedTex.pData);
+	for (int y = 0; y < height; ++y) {
+		std::memcpy(
+			frame.ptr<uint8_t>(y),
+			src + static_cast<size_t>(y) * mappedTex.RowPitch,
+			rowBytes
+		);
+	}
+	m_d3dContext->Unmap(m_texture.get(), 0);
+
+	{
+		std::lock_guard lock(m_mutex_cap);
+		m_cap = std::move(frame);
+	}
+	m_img_updated.store(true);
+	return true;
 }
 
 } // namespace wgc
