@@ -25,6 +25,7 @@
 #include <winrt/Windows.System.h>
 #include <dwmapi.h>
 #include <cstring>
+#include <vector>
 
 using namespace winrt;
 using namespace winrt::Windows::Foundation;
@@ -130,6 +131,46 @@ bool get_client_box(HWND window, uint32_t width, uint32_t height, D3D11_BOX* cli
 	return client_box_available;
 }
 
+bool IsProcessAtLeastMediumIntegrity() {
+	HANDLE token = nullptr;
+	if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token))
+		return true;
+
+	DWORD size = 0;
+	GetTokenInformation(token, TokenIntegrityLevel, nullptr, 0, &size);
+	bool supported = true;
+	if (size > 0) {
+		std::vector<BYTE> buffer(size);
+		if (GetTokenInformation(
+			token, TokenIntegrityLevel,
+			buffer.data(), size, &size
+		)) {
+			const auto* label =
+				reinterpret_cast<const TOKEN_MANDATORY_LABEL*>(buffer.data());
+			const PSID sid = label->Label.Sid;
+			const DWORD count = *GetSidSubAuthorityCount(sid);
+			if (count > 0) {
+				const DWORD rid = *GetSidSubAuthority(sid, count - 1);
+				supported = rid >= SECURITY_MANDATORY_MEDIUM_RID;
+			}
+		}
+	}
+	CloseHandle(token);
+	return supported;
+}
+
+bool CheckCaptureIntegrity() {
+	if (IsProcessAtLeastMediumIntegrity())
+		return true;
+
+	wgc::SetCaptureError(
+		E_ACCESSDENIED,
+		L"Windows Graphics Capture requires a Medium or higher integrity process. "
+		L"Run the host from a normal desktop session or elevated."
+	);
+	return false;
+}
+
 inline bool CreateCaptureItemForWindow(GraphicsCaptureItem& item, HWND hwnd) {
 	auto activation_factory = get_activation_factory<GraphicsCaptureItem>();
 	auto interop_factory = activation_factory.as<IGraphicsCaptureItemInterop>();
@@ -195,6 +236,9 @@ bool Capturer::startCaptureWindow(HWND hwnd, bool freeThreaded) {
 	SetCaptureError(S_OK, nullptr);
 	stopCapture();
 
+	if (!CheckCaptureIntegrity())
+		return false;
+
 	try {
 		if (!IsWindow(hwnd) || IsIconic(hwnd)) {
 			SetCaptureError(E_INVALIDARG, L"Window is invalid or minimized.");
@@ -222,6 +266,9 @@ bool Capturer::startCaptureWindow(HWND hwnd, bool freeThreaded) {
 bool Capturer::startCaptureMonitor(HMONITOR hmonitor, bool freeThreaded) {
 	SetCaptureError(S_OK, nullptr);
 	stopCapture();
+
+	if (!CheckCaptureIntegrity())
+		return false;
 
 	try {
 		if (hmonitor == nullptr) {
@@ -251,6 +298,9 @@ bool Capturer::startCaptureWindowWithCallback(HWND hwnd, std::function<void(cons
 	SetCaptureError(S_OK, nullptr);
 	stopCapture();
 
+	if (!CheckCaptureIntegrity())
+		return false;
+
 	try {
 		if (!cb || !IsWindow(hwnd) || IsIconic(hwnd)) {
 			SetCaptureError(E_INVALIDARG, L"Window or callback is invalid.");
@@ -278,6 +328,9 @@ bool Capturer::startCaptureWindowWithCallback(HWND hwnd, std::function<void(cons
 bool Capturer::startCaptureMonitorWithCallback(HMONITOR hmonitor, std::function<void(const cv::Mat&)> cb) {
 	SetCaptureError(S_OK, nullptr);
 	stopCapture();
+
+	if (!CheckCaptureIntegrity())
+		return false;
 
 	try {
 		if (!cb || hmonitor == nullptr) {
