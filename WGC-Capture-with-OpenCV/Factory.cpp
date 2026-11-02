@@ -22,42 +22,7 @@
 #include "Factory.h"
 #include "Capturer.h"
 
-using namespace winrt;
-using namespace winrt::Windows::Foundation;
-using namespace winrt::Windows::Graphics::Capture;
-
 namespace {
-
-inline auto CreateD3DDevice(
-	D3D_DRIVER_TYPE const type,
-	com_ptr<ID3D11Device>& device
-) {
-	WINRT_ASSERT(!device);
-	constexpr UINT flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
-	return D3D11CreateDevice(nullptr, type, nullptr, flags, nullptr, 0, D3D11_SDK_VERSION, device.put(), nullptr, nullptr);
-}
-
-inline auto CreateD3DDevice() {
-	com_ptr<ID3D11Device> device;
-	HRESULT hr = CreateD3DDevice(D3D_DRIVER_TYPE_HARDWARE, device);
-	if (DXGI_ERROR_UNSUPPORTED == hr)
-		hr = CreateD3DDevice(D3D_DRIVER_TYPE_WARP, device);
-	check_hresult(hr);
-	return device;
-}
-
-extern "C" {
-	HRESULT __stdcall CreateDirect3D11DeviceFromDXGIDevice(
-		IDXGIDevice* dxgiDevice,
-		::IInspectable** graphicsDevice
-	);
-}
-
-inline auto CreateDirect3DDevice(IDXGIDevice* dxgi_device) {
-	com_ptr<::IInspectable> d3d_device;
-	check_hresult(CreateDirect3D11DeviceFromDXGIDevice(dxgi_device, d3d_device.put()));
-	return d3d_device.as<Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice>();
-}
 
 size_t g_capturerCnt = 0;
 
@@ -65,21 +30,15 @@ size_t g_capturerCnt = 0;
 
 namespace wgc {
 
-Factory::Factory() :
-	m_device(nullptr) {
-	com_ptr<ID3D11Device> d3dDevice = CreateD3DDevice();
-	com_ptr<IDXGIDevice> dxgiDevice = d3dDevice.as<IDXGIDevice>();
-	m_device = CreateDirect3DDevice(dxgiDevice.get());
-}
+Factory::Factory() = default;
 
 Factory::~Factory() {
 	m_capturers.clear();
-	m_device.Close();
 }
 
 std::weak_ptr<ICapturer> Factory::createCapturer() {
 	size_t id = g_capturerCnt++;
-	auto capture = std::make_shared<Capturer>(m_device, id);
+	auto capture = std::make_shared<Capturer>(id);
 	m_capturers.emplace(id, capture);
 	return capture;
 }

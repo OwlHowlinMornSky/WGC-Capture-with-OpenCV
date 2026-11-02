@@ -38,7 +38,6 @@ public:
 	virtual void destroyCapturer(std::weak_ptr<ICapturer> instance) override;
 
 protected:
-	winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice m_device;
 	std::map<size_t, std::shared_ptr<ICapturer>> m_capturers;
 };
 

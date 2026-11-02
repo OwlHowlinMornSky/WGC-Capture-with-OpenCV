@@ -32,6 +32,41 @@ using namespace winrt::Windows::Graphics::DirectX::Direct3D11;
 
 namespace {
 
+extern "C" {
+	HRESULT __stdcall CreateDirect3D11DeviceFromDXGIDevice(
+		IDXGIDevice* dxgiDevice,
+		::IInspectable** graphicsDevice
+	);
+}
+
+inline HRESULT CreateD3DDevice(
+	D3D_DRIVER_TYPE const type,
+	com_ptr<ID3D11Device>& device
+) {
+	WINRT_ASSERT(!device);
+	constexpr UINT flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+	return D3D11CreateDevice(
+		nullptr, type, nullptr, flags,
+		nullptr, 0, D3D11_SDK_VERSION,
+		device.put(), nullptr, nullptr
+	);
+}
+
+inline auto CreateD3DDevice() {
+	com_ptr<ID3D11Device> device;
+	HRESULT hr = CreateD3DDevice(D3D_DRIVER_TYPE_HARDWARE, device);
+	if (DXGI_ERROR_UNSUPPORTED == hr)
+		hr = CreateD3DDevice(D3D_DRIVER_TYPE_WARP, device);
+	check_hresult(hr);
+	return device;
+}
+
+inline auto CreateDirect3DDevice(IDXGIDevice* dxgi_device) {
+	com_ptr<::IInspectable> d3d_device;
+	check_hresult(CreateDirect3D11DeviceFromDXGIDevice(dxgi_device, d3d_device.put()));
+	return d3d_device.as<IDirect3DDevice>();
+}
+
 struct __declspec(uuid("A9B3D012-3DF2-4EE3-B8D1-8695F457D3C1"))
 	IDirect3DDxgiInterfaceAccess : ::IUnknown {
 	virtual HRESULT __stdcall GetInterface(GUID const& id, void** object) = 0;
@@ -106,20 +141,20 @@ inline bool CreateCaptureItemForMonitor(GraphicsCaptureItem& item, HMONITOR hmon
 
 namespace wgc {
 
-Capturer::Capturer(IDirect3DDevice const& device, size_t id) :
+Capturer::Capturer(size_t id) :
 	m_id(id),
 
 	m_item(nullptr),
 	m_framePool(nullptr),
 	m_session(nullptr),
 
+	r_device(nullptr),
+	r_d3dDevice(nullptr),
+	m_d3dContext(nullptr),
+
 	m_texture(nullptr),
 	m_lastSize(),
 	m_lastTexSize(),
-
-	r_device(device),
-	m_d3dContext(nullptr),
-	r_d3dDevice(nullptr),
 
 	m_img_clientarea(false),
 	m_img_needRefresh(false),
@@ -127,7 +162,11 @@ Capturer::Capturer(IDirect3DDevice const& device, size_t id) :
 
 	m_client_box(),
 	m_target_window(NULL),
-	m_target_monitor(NULL) {}
+	m_target_monitor(NULL) {
+	r_d3dDevice = CreateD3DDevice();
+	com_ptr<IDXGIDevice> dxgiDevice = r_d3dDevice.as<IDXGIDevice>();
+	r_device = CreateDirect3DDevice(dxgiDevice.get());
+}
 
 Capturer::~Capturer() {
 	stopCapture();

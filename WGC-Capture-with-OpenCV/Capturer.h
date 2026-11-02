@@ -35,7 +35,7 @@ namespace wgc {
 class Capturer final :
 	public ICapturer {
 public:
-	Capturer(winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice const& device, size_t id);
+	explicit Capturer(size_t id);
 
 	~Capturer();
 
