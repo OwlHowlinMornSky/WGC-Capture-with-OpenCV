@@ -25,6 +25,7 @@
 #include <mutex>
 #include <atomic>
 #include <functional>
+#include <memory>
 #include "include/WGC/WGC.h"
 
 namespace wgc {
@@ -33,7 +34,8 @@ namespace wgc {
  * @brief 截取器。
 */
 class Capturer final :
-	public ICapturer {
+	public ICapturer,
+	public std::enable_shared_from_this<Capturer> {
 public:
 	explicit Capturer(size_t id);
 
@@ -73,6 +75,7 @@ protected:
 	); // 注意这个方法不锁mat，不管needUpdate，也不设置updated。
 	bool CreateTexture(winrt::Windows::Graphics::SizeInt32 size);
 	bool UpdateMatFromTexture();
+	void ResetSessionLocked() noexcept;
 
 protected:
 	size_t m_id;
@@ -96,8 +99,9 @@ protected:
 	std::function<void(const cv::Mat&)> m_callback;
 
 	D3D11_BOX m_client_box;
-	HWND m_target_window;
-	HMONITOR m_target_monitor;
+	std::atomic<bool> m_active;
+	std::atomic<HWND> m_target_window;
+	std::atomic<HMONITOR> m_target_monitor;
 
 	cv::Mat m_cap;
 	std::mutex m_mutex_cap;

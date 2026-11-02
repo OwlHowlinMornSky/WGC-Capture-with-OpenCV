@@ -162,6 +162,7 @@ Capturer::Capturer(size_t id) :
 	m_img_updated(false),
 
 	m_client_box(),
+	m_active(false),
 	m_target_window(NULL),
 	m_target_monitor(NULL) {
 	r_d3dDevice = CreateD3DDevice();
@@ -196,7 +197,16 @@ bool Capturer::startCaptureWindow(HWND hwnd, bool freeThreaded) {
 		m_framePool = Direct3D11CaptureFramePool::Create(r_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
 
 	m_session = m_framePool.CreateCaptureSession(m_item);
-	m_frameArrived = m_framePool.FrameArrived(auto_revoke, { this, &Capturer::OnFrameArrived });
+	m_frameArrived = m_framePool.FrameArrived(
+		auto_revoke,
+		[weak = weak_from_this()](
+			Direct3D11CaptureFramePool const& sender,
+			winrt::Windows::Foundation::IInspectable const& args
+		) {
+			if (auto self = weak.lock())
+				self->OnFrameArrived(sender, args);
+		}
+	);
 
 	m_session.IsCursorCaptureEnabled(false);
 	m_session.IsBorderRequired(false);
@@ -207,6 +217,7 @@ bool Capturer::startCaptureWindow(HWND hwnd, bool freeThreaded) {
 	m_session.StartCapture();
 	askForRefresh();
 	m_target_window = hwnd;
+	m_active.store(true);
 	return true;
 }
 
@@ -233,7 +244,16 @@ bool Capturer::startCaptureMonitor(HMONITOR hmonitor, bool freeThreaded) {
 		m_framePool = Direct3D11CaptureFramePool::Create(r_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
 
 	m_session = m_framePool.CreateCaptureSession(m_item);
-	m_frameArrived = m_framePool.FrameArrived(auto_revoke, { this, &Capturer::OnFrameArrived });
+	m_frameArrived = m_framePool.FrameArrived(
+		auto_revoke,
+		[weak = weak_from_this()](
+			Direct3D11CaptureFramePool const& sender,
+			winrt::Windows::Foundation::IInspectable const& args
+		) {
+			if (auto self = weak.lock())
+				self->OnFrameArrived(sender, args);
+		}
+	);
 
 	m_session.IsCursorCaptureEnabled(false);
 	m_session.IsBorderRequired(false);
@@ -244,6 +264,7 @@ bool Capturer::startCaptureMonitor(HMONITOR hmonitor, bool freeThreaded) {
 	m_session.StartCapture();
 	askForRefresh();
 	m_target_monitor = hmonitor;
+	m_active.store(true);
 	return true;
 }
 
@@ -267,7 +288,16 @@ bool Capturer::startCaptureWindowWithCallback(HWND hwnd, std::function<void(cons
 	m_framePool = Direct3D11CaptureFramePool::CreateFreeThreaded(r_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
 
 	m_session = m_framePool.CreateCaptureSession(m_item);
-	m_frameArrived = m_framePool.FrameArrived(auto_revoke, { this, &Capturer::OnFrameArrivedWithCallback });
+	m_frameArrived = m_framePool.FrameArrived(
+		auto_revoke,
+		[weak = weak_from_this()](
+			Direct3D11CaptureFramePool const& sender,
+			winrt::Windows::Foundation::IInspectable const& args
+		) {
+			if (auto self = weak.lock())
+				self->OnFrameArrivedWithCallback(sender, args);
+		}
+	);
 
 	m_session.IsCursorCaptureEnabled(false);
 	m_session.IsBorderRequired(false);
@@ -279,6 +309,7 @@ bool Capturer::startCaptureWindowWithCallback(HWND hwnd, std::function<void(cons
 	m_session.StartCapture();
 	askForRefresh();
 	m_target_window = hwnd;
+	m_active.store(true);
 	return true;
 }
 
@@ -302,7 +333,16 @@ bool Capturer::startCaptureMonitorWithCallback(HMONITOR hmonitor, std::function<
 	m_framePool = Direct3D11CaptureFramePool::CreateFreeThreaded(r_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
 
 	m_session = m_framePool.CreateCaptureSession(m_item);
-	m_frameArrived = m_framePool.FrameArrived(auto_revoke, { this, &Capturer::OnFrameArrivedWithCallback });
+	m_frameArrived = m_framePool.FrameArrived(
+		auto_revoke,
+		[weak = weak_from_this()](
+			Direct3D11CaptureFramePool const& sender,
+			winrt::Windows::Foundation::IInspectable const& args
+		) {
+			if (auto self = weak.lock())
+				self->OnFrameArrivedWithCallback(sender, args);
+		}
+	);
 
 	m_session.IsCursorCaptureEnabled(false);
 	m_session.IsBorderRequired(false);
@@ -314,29 +354,44 @@ bool Capturer::startCaptureMonitorWithCallback(HMONITOR hmonitor, std::function<
 	m_session.StartCapture();
 	askForRefresh();
 	m_target_monitor = hmonitor;
+	m_active.store(true);
 	return true;
 }
 
 void Capturer::stopCapture() {
-	if (NULL == m_target_window && NULL == m_target_monitor)
-		return;
 	std::lock_guard lockProc(m_mutex_proc);
+	ResetSessionLocked();
+}
 
-	m_target_window = NULL;
-	m_target_monitor = NULL;
+void Capturer::ResetSessionLocked() noexcept {
+	m_active.store(false);
+	m_target_window.store(nullptr);
+	m_target_monitor.store(nullptr);
 
-	m_frameArrived.revoke();
-	m_framePool.Close();
-	m_session.Close();
+	try {
+		m_frameArrived.revoke();
+	}
+	catch (...) {
+	}
 
-	m_texture = nullptr;
-
-	m_framePool = nullptr;
-	m_session = nullptr;
+	if (m_framePool) {
+		try {
+			m_framePool.Close();
+		}
+		catch (...) {
+		}
+		m_framePool = nullptr;
+	}
+	if (m_session) {
+		try {
+			m_session.Close();
+		}
+		catch (...) {
+		}
+		m_session = nullptr;
+	}
 	m_item = nullptr;
-
-	m_d3dContext = nullptr;
-	r_d3dDevice = nullptr;
+	m_texture = nullptr;
 
 	{
 		std::lock_guard lock(m_mutex_cap);
@@ -345,7 +400,13 @@ void Capturer::stopCapture() {
 	m_img_needRefresh.store(false);
 	m_img_updated.store(false);
 
-	m_img_clientarea = false;
+	m_callback = nullptr;
+	m_d3dContext = nullptr;
+	r_d3dDevice = nullptr;
+
+	m_lastSize = {};
+	m_lastTexSize = {};
+	m_client_box = {};
 }
 
 void Capturer::setClipToClientArea(bool enabled) {
@@ -357,20 +418,20 @@ bool Capturer::isClipToClientArea() {
 }
 
 bool Capturer::isCapturing() {
-	return m_target_window != NULL || m_target_monitor != NULL;
+	return m_active.load();
 }
 
 bool Capturer::isCaptureWindow() {
-	return m_target_window != NULL;
+	return m_active.load() && m_target_window.load() != nullptr;
 }
 
 bool Capturer::isCaptureMonitor() {
-	return m_target_monitor != NULL;
+	return m_active.load() && m_target_monitor.load() != nullptr;
 }
 
 void Capturer::askForRefresh() {
 	m_img_updated.store(false);
-	return m_img_needRefresh.store(true);
+	m_img_needRefresh.store(true);
 }
 
 bool Capturer::isRefreshed() {
@@ -394,24 +455,116 @@ size_t Capturer::getId() const {
 	return m_id;
 }
 
+namespace {
+
+bool SamePool(
+	winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool const& left,
+	winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool const& right
+) {
+	if (!left || !right)
+		return false;
+	return winrt::get_abi(left) == winrt::get_abi(right);
+}
+
+} // namespace
+
 void Capturer::OnFrameArrived(
 	Direct3D11CaptureFramePool const& sender,
 	winrt::Windows::Foundation::IInspectable const&
 ) {
-	std::lock_guard lockProc(m_mutex_proc);
+	try {
+		std::lock_guard lockProc(m_mutex_proc);
+		if (!m_active.load())
+			return;
+		if (!SamePool(m_framePool, sender))
+			return;
 
-	const Direct3D11CaptureFrame frame = sender.TryGetNextFrame();
-	const SizeInt32 frameContentSize = frame.ContentSize();
+		const Direct3D11CaptureFrame frame = sender.TryGetNextFrame();
+		if (!frame)
+			return;
+		const SizeInt32 frameContentSize = frame.ContentSize();
 
-	if (m_img_needRefresh.exchange(false)) {
-		com_ptr<ID3D11Texture2D> frameSurface = ::GetDXGIInterfaceFromObject<ID3D11Texture2D>(frame.Surface());
+		if (m_img_needRefresh.exchange(false)) {
+			const auto surface = frame.Surface();
+			if (!surface)
+				return;
+			com_ptr<ID3D11Texture2D> frameSurface =
+				::GetDXGIInterfaceFromObject<ID3D11Texture2D>(surface);
+			if (!frameSurface)
+				return;
+
+			/* need GetDesc because ContentSize is not reliable */
+			D3D11_TEXTURE2D_DESC desc = {};
+			frameSurface->GetDesc(&desc);
+
+			const HWND target = m_target_window.load();
+			bool client_clip_success = false;
+			if (m_img_clientarea.load() && target != nullptr &&
+				get_client_box(target, desc.Width, desc.Height, &m_client_box)) {
+				desc.Width = m_client_box.right - m_client_box.left;
+				desc.Height = m_client_box.bottom - m_client_box.top;
+				client_clip_success = true;
+			}
+
+			const SizeInt32 targetSize{
+				static_cast<int32_t>(desc.Width),
+				static_cast<int32_t>(desc.Height)
+			};
+			if (!CreateTexture(targetSize))
+				return;
+
+			if (client_clip_success)
+				m_d3dContext->CopySubresourceRegion(m_texture.get(), 0, 0, 0, 0, frameSurface.get(), 0, &m_client_box);
+			else
+				m_d3dContext->CopyResource(m_texture.get(), frameSurface.get());
+
+			if (!UpdateMatFromTexture())
+				return;
+		}
+
+		if (frameContentSize.Width > 0 && frameContentSize.Height > 0 &&
+			(m_lastSize.Width != frameContentSize.Width ||
+				m_lastSize.Height != frameContentSize.Height)) {
+			m_lastSize = frameContentSize;
+			m_framePool.Recreate(r_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
+		}
+	}
+	catch (...) {
+	}
+}
+
+void Capturer::OnFrameArrivedWithCallback(
+	winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool const& sender,
+	winrt::Windows::Foundation::IInspectable const&
+) {
+	try {
+		std::unique_lock lockProc(m_mutex_proc);
+		if (!m_active.load())
+			return;
+		if (!SamePool(m_framePool, sender))
+			return;
+
+		const Direct3D11CaptureFrame frame = sender.TryGetNextFrame();
+		if (!frame)
+			return;
+		const SizeInt32 frameContentSize = frame.ContentSize();
+
+		const auto surface = frame.Surface();
+		if (!surface)
+			return;
+		com_ptr<ID3D11Texture2D> frameSurface =
+			::GetDXGIInterfaceFromObject<ID3D11Texture2D>(surface);
+		if (!frameSurface)
+			return;
 
 		/* need GetDesc because ContentSize is not reliable */
 		D3D11_TEXTURE2D_DESC desc = {};
 		frameSurface->GetDesc(&desc);
 
+		const HWND target = m_target_window.load();
 		bool client_clip_success = false;
-		if (m_img_clientarea && NULL != m_target_window && get_client_box(m_target_window, desc.Width, desc.Height, &m_client_box)) {
+		if (m_img_clientarea.load() && target != nullptr &&
+			get_client_box(target, desc.Width, desc.Height, &m_client_box)) {
 			desc.Width = m_client_box.right - m_client_box.left;
 			desc.Height = m_client_box.bottom - m_client_box.top;
 			client_clip_success = true;
@@ -431,58 +584,27 @@ void Capturer::OnFrameArrived(
 
 		if (!UpdateMatFromTexture())
 			return;
+
+		if (frameContentSize.Width > 0 && frameContentSize.Height > 0 &&
+			(m_lastSize.Width != frameContentSize.Width ||
+				m_lastSize.Height != frameContentSize.Height)) {
+			m_lastSize = frameContentSize;
+			m_framePool.Recreate(r_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
+		}
+
+		cv::Mat frameCopy;
+		std::function<void(const cv::Mat&)> callback;
+		{
+			std::lock_guard lockCap(m_mutex_cap);
+			frameCopy = m_cap;
+			callback = m_callback;
+		}
+
+		lockProc.unlock();
+		if (callback)
+			callback(frameCopy);
 	}
-
-	if (m_lastSize.Width != frameContentSize.Width ||
-		m_lastSize.Height != frameContentSize.Height) {
-		m_lastSize = frameContentSize;
-		m_framePool.Recreate(r_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
-	}
-}
-
-void Capturer::OnFrameArrivedWithCallback(
-	winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool const& sender,
-	winrt::Windows::Foundation::IInspectable const& args
-) {
-	std::lock_guard lockProc(m_mutex_proc);
-
-	const Direct3D11CaptureFrame frame = sender.TryGetNextFrame();
-	const SizeInt32 frameContentSize = frame.ContentSize();
-
-	com_ptr<ID3D11Texture2D> frameSurface = ::GetDXGIInterfaceFromObject<ID3D11Texture2D>(frame.Surface());
-
-	/* need GetDesc because ContentSize is not reliable */
-	D3D11_TEXTURE2D_DESC desc = {};
-	frameSurface->GetDesc(&desc);
-
-	bool client_clip_success = false;
-	if (m_img_clientarea && NULL != m_target_window && get_client_box(m_target_window, desc.Width, desc.Height, &m_client_box)) {
-		desc.Width = m_client_box.right - m_client_box.left;
-		desc.Height = m_client_box.bottom - m_client_box.top;
-		client_clip_success = true;
-	}
-
-	const SizeInt32 targetSize{
-		static_cast<int32_t>(desc.Width),
-		static_cast<int32_t>(desc.Height)
-	};
-	if (!CreateTexture(targetSize))
-		return;
-
-	if (client_clip_success)
-		m_d3dContext->CopySubresourceRegion(m_texture.get(), 0, 0, 0, 0, frameSurface.get(), 0, &m_client_box);
-	else
-		m_d3dContext->CopyResource(m_texture.get(), frameSurface.get());
-
-	if (!UpdateMatFromTexture())
-		return;
-
-	m_callback(m_cap);
-
-	if (m_lastSize.Width != frameContentSize.Width ||
-		m_lastSize.Height != frameContentSize.Height) {
-		m_lastSize = frameContentSize;
-		m_framePool.Recreate(r_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, m_lastSize);
+	catch (...) {
 	}
 }
 
